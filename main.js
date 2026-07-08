@@ -28,6 +28,7 @@ const loginButton = $("loginButton");
 const createAccountButton = $("createAccountButton");
 const loginMessage = $("loginMessage");
 const accountList = $("accountList");
+const resetLocalDataButton = $("resetLocalDataButton");
 const appShell = $("appShell");
 const activeAccountName = $("activeAccountName");
 const logoutButton = $("logoutButton");
@@ -207,6 +208,23 @@ function createAccount(name, pin) {
   showApp(account);
 }
 
+function resetLocalData() {
+  const ok = confirm("この端末の乱獲ログのアカウントと記録をすべて削除しますか？");
+  if (!ok) return;
+
+  Object.keys(localStorage)
+    .filter((key) => key.startsWith("rankaku-log"))
+    .forEach((key) => localStorage.removeItem(key));
+  sessionStorage.removeItem(SESSION_KEY);
+  activeAccount = null;
+  accountNameInput.value = "";
+  accountPinInput.value = "";
+  loginScreen.hidden = false;
+  appShell.hidden = true;
+  renderAccountList();
+  setLoginMessage("保存データをリセットしました。新規作成してください。");
+}
+
 function normalizeRecord(record) {
   return {
     ...record,
@@ -330,6 +348,7 @@ function fileToCompressedDataUrl(file) {
 async function runAuth(action, loadingText) {
   loginButton.disabled = true;
   createAccountButton.disabled = true;
+  resetLocalDataButton.disabled = true;
   setLoginMessage(loadingText);
   try {
     await action();
@@ -339,6 +358,7 @@ async function runAuth(action, loadingText) {
   } finally {
     loginButton.disabled = false;
     createAccountButton.disabled = false;
+    resetLocalDataButton.disabled = false;
   }
 }
 
@@ -356,6 +376,8 @@ createAccountButton.addEventListener("click", async () => {
     "作成中..."
   );
 });
+
+resetLocalDataButton.addEventListener("click", resetLocalData);
 
 accountList.addEventListener("click", (event) => {
   const button = event.target.closest(".accountChip");

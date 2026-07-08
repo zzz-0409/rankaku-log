@@ -24,6 +24,8 @@ const loginScreen = $("loginScreen");
 const loginForm = $("loginForm");
 const accountNameInput = $("accountNameInput");
 const accountPinInput = $("accountPinInput");
+const loginButton = $("loginButton");
+const createAccountButton = $("createAccountButton");
 const loginMessage = $("loginMessage");
 const accountList = $("accountList");
 const appShell = $("appShell");
@@ -69,9 +71,21 @@ function saveAccounts(accounts) {
 
 async function hashPin(accountId, pin) {
   if (!pin) return "";
+  if (!crypto.subtle || typeof TextEncoder === "undefined") {
+    return simpleHash(`${accountId}:${pin}`);
+  }
   const bytes = new TextEncoder().encode(`${accountId}:${pin}`);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function simpleHash(value) {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `fallback-${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
 
 function setLoginMessage(message) {
@@ -121,33 +135,62 @@ function findAccountByName(name) {
   return loadAccounts().find((account) => accountNameKey(account.name) === key);
 }
 
-async function loginOrCreateAccount(name, pin) {
+async function updateLegacyAccountPassword(existing, pinHash) {
+  const accounts = loadAccounts().map((account) => (
+    account.id === existing.id ? { ...account, pinHash } : account
+  ));
+  saveAccounts(accounts);
+  showApp({ ...existing, pinHash });
+}
+
+function validateCredentials(name, pin) {
   const cleanName = normalizeName(name);
   if (!cleanName) {
     setLoginMessage("アカウント名を入力してください。");
-    return;
+    return null;
   }
   if (pin.length < 4) {
     setLoginMessage("パスワードは4文字以上で入力してください。");
+    return null;
+  }
+  return { cleanName, pin };
+}
+
+async function loginAccount(name, pin) {
+  const credentials = validateCredentials(name, pin);
+  if (!credentials) return;
+  const { cleanName } = credentials;
+  const existing = findAccountByName(cleanName);
+  if (!existing) {
+    setLoginMessage("アカウントがありません。新規作成してください。");
     return;
   }
 
+  const pinHash = await hashPin(existing.id, pin);
+  if (!existing.pinHash) {
+    await updateLegacyAccountPassword(existing, pinHash);
+    return;
+  }
+
+  if (pinHash !== existing.pinHash) {
+    setLoginMessage("パスワードが違います。");
+    return;
+  }
+  showApp(existing);
+}
+
+async function createAccount(name, pin) {
+  const credentials = validateCredentials(name, pin);
+  if (!credentials) return;
+  const { cleanName } = credentials;
   const existing = findAccountByName(cleanName);
-  if (existing) {
+  if (existing?.pinHash) {
+    setLoginMessage("このアカウント名はすでに使われています。ログインしてください。");
+    return;
+  }
+  if (existing && !existing.pinHash) {
     const pinHash = await hashPin(existing.id, pin);
-    if (!existing.pinHash) {
-      const accounts = loadAccounts().map((account) => (
-        account.id === existing.id ? { ...account, pinHash } : account
-      ));
-      saveAccounts(accounts);
-      showApp({ ...existing, pinHash });
-      return;
-    }
-    if (existing.pinHash && pinHash !== existing.pinHash) {
-      setLoginMessage("パスワードが違います。");
-      return;
-    }
-    showApp(existing);
+    await updateLegacyAccountPassword(existing, pinHash);
     return;
   }
 
@@ -284,10 +327,34 @@ function fileToCompressedDataUrl(file) {
   });
 }
 
+async function runAuth(action, loadingText) {
+  loginButton.disabled = true;
+  createAccountButton.disabled = true;
+  setLoginMessage(loadingText);
+  try {
+    await action();
+  } catch (error) {
+    console.error(error);
+    setLoginMessage("処理に失敗しました。もう一度試してください。");
+  } finally {
+    loginButton.disabled = false;
+    createAccountButton.disabled = false;
+  }
+}
+
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  setLoginMessage("ログイン中...");
-  await loginOrCreateAccount(accountNameInput.value, accountPinInput.value);
+  await runAuth(
+    () => loginAccount(accountNameInput.value, accountPinInput.value),
+    "ログイン中..."
+  );
+});
+
+createAccountButton.addEventListener("click", async () => {
+  await runAuth(
+    () => createAccount(accountNameInput.value, accountPinInput.value),
+    "作成中..."
+  );
 });
 
 accountList.addEventListener("click", (event) => {

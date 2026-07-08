@@ -115,6 +115,12 @@ h1 {
   font-weight: 750;
 }
 
+.loginActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
 .accountChips {
   display: flex;
   flex-wrap: wrap;

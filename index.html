@@ -20,7 +20,10 @@
         <span>パスワード</span>
         <input id="accountPinInput" type="password" autocomplete="current-password" minlength="4" maxlength="64" placeholder="4文字以上" required />
       </label>
-      <button class="primaryButton" type="submit">ログイン / 作成</button>
+      <div class="loginActions">
+        <button id="loginButton" class="primaryButton" type="submit">ログイン</button>
+        <button id="createAccountButton" type="button">新規作成</button>
+      </div>
       <p id="loginMessage" class="status">アカウントごとに記録を分けます。パスワードはこの端末内に保存されます。</p>
       <div id="accountList" class="accountList"></div>
     </form>

@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>乱獲ログ</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <section id="loginScreen" class="loginScreen">
+    <form id="loginForm" class="loginCard">
+      <p class="eyebrow">Salmon Run</p>
+      <h1>乱獲ログ</h1>
+      <label class="field">
+        <span>アカウント名</span>
+        <input id="accountNameInput" type="text" autocomplete="username" maxlength="24" placeholder="例: zzz" required />
+      </label>
+      <label class="field">
+        <span>パスワード</span>
+        <input id="accountPinInput" type="password" autocomplete="current-password" minlength="4" maxlength="64" placeholder="4文字以上" required />
+      </label>
+      <button class="primaryButton" type="submit">ログイン / 作成</button>
+      <p id="loginMessage" class="status">アカウントごとに記録を分けます。パスワードはこの端末内に保存されます。</p>
+      <div id="accountList" class="accountList"></div>
+    </form>
+  </section>
+
+  <div id="appShell" class="appShell" hidden>
+    <header class="appHeader">
+      <div>
+        <p class="eyebrow">Salmon Run</p>
+        <h1>乱獲ログ</h1>
+      </div>
+      <div class="accountBar">
+        <span id="activeAccountName" class="accountPill"></span>
+        <span id="recordCount" class="recordCount">0件</span>
+        <button id="logoutButton" class="iconButton" type="button" aria-label="ログアウト">出</button>
+      </div>
+    </header>
+
+    <nav class="viewTabs" aria-label="ページ切り替え">
+      <button class="viewTab active" type="button" data-view-target="logView">記録</button>
+      <button class="viewTab" type="button" data-view-target="bestView">最高まとめ</button>
+    </nav>
+
+    <main class="app">
+      <div id="logView" class="view active">
+        <section class="panel">
+          <div class="sectionTitle">
+            <span class="step">1</span>
+            <h2>スクショ読取</h2>
+          </div>
+
+          <label class="filePicker">
+            <input id="imageInput" type="file" accept="image/*" />
+            <span>画像を選ぶ</span>
+          </label>
+
+          <button id="ocrButton" class="primaryButton" type="button">画像を読み取る</button>
+          <p id="status" class="status">未読取</p>
+          <img id="preview" alt="選択したスクリーンショットのプレビュー" />
+        </section>
+
+        <section class="panel">
+          <div class="sectionTitle">
+            <span class="step">2</span>
+            <h2>記録を確認</h2>
+          </div>
+
+          <fieldset class="modeField">
+            <legend>ウェーブ構成</legend>
+            <label>
+              <input type="radio" name="waveType" value="dayOnly" checked />
+              <span>昼のみ</span>
+            </label>
+            <label>
+              <input type="radio" name="waveType" value="nightAny" />
+              <span>夜あり</span>
+            </label>
+          </fieldset>
+
+          <label class="field">
+            <span>ステージ</span>
+            <select id="stage">
+              <option>シェケナダム</option>
+              <option>アラマキ砦</option>
+              <option>ムニ・エール海洋発電所</option>
+              <option>難破船ドン・ブラコ</option>
+              <option>すじこジャンクション跡</option>
+              <option>トキシラズいぶし工房</option>
+              <option>どんぴこ闘技場</option>
+            </select>
+          </label>
+
+          <div class="numberGrid">
+            <label class="field">
+              <span>金イクラ</span>
+              <input id="gold" type="number" inputmode="numeric" min="0" placeholder="0" />
+            </label>
+            <label class="field">
+              <span>赤イクラ</span>
+              <input id="red" type="number" inputmode="numeric" min="0" placeholder="0" />
+            </label>
+            <label class="field">
+              <span>オオモノ</span>
+              <input id="boss" type="number" inputmode="numeric" min="0" placeholder="0" />
+            </label>
+            <label class="field">
+              <span>救助</span>
+              <input id="rescue" type="number" inputmode="numeric" min="0" placeholder="0" />
+            </label>
+            <label class="field">
+              <span>デス</span>
+              <input id="death" type="number" inputmode="numeric" min="0" placeholder="0" />
+            </label>
+          </div>
+
+          <p class="note">救助とデスはOCRで拾いにくいため、保存前に確認してください。</p>
+          <button id="saveButton" class="primaryButton" type="button">この記録を保存</button>
+        </section>
+
+        <section class="panel">
+          <div class="sectionTitle">
+            <span class="step">3</span>
+            <h2>ステージ平均</h2>
+          </div>
+          <div id="summary"></div>
+          <div class="buttonRow">
+            <button id="exportButton" type="button">CSV書き出し</button>
+            <button id="clearButton" class="dangerButton" type="button">全削除</button>
+          </div>
+        </section>
+
+        <section class="panel rawPanel">
+          <details>
+            <summary>OCRテキスト</summary>
+            <pre id="rawText"></pre>
+          </details>
+        </section>
+      </div>
+
+      <div id="bestView" class="view">
+        <section class="panel">
+          <div class="sectionTitle">
+            <span class="step">★</span>
+            <h2>最高まとめ</h2>
+          </div>
+          <div id="totalSummary"></div>
+        </section>
+
+        <section class="panel">
+          <div class="sectionTitle compactTitle">
+            <h2>昼のみ</h2>
+          </div>
+          <div id="dayOnlyBest" class="bestList"></div>
+        </section>
+
+        <section class="panel">
+          <div class="sectionTitle compactTitle">
+            <h2>夜あり</h2>
+          </div>
+          <div id="nightAnyBest" class="bestList"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>

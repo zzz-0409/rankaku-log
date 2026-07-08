@@ -1,0 +1,9 @@
+{
+  "name": "乱獲ログ",
+  "short_name": "乱獲ログ",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#101312",
+  "theme_color": "#b7e34b",
+  "icons": []
+}

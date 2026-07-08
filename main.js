@@ -69,14 +69,9 @@ function saveAccounts(accounts) {
   localStorage.setItem(ACCOUNT_LIST_KEY, JSON.stringify(accounts));
 }
 
-async function hashPin(accountId, pin) {
+function hashPin(accountId, pin) {
   if (!pin) return "";
-  if (!crypto.subtle || typeof TextEncoder === "undefined") {
-    return simpleHash(`${accountId}:${pin}`);
-  }
-  const bytes = new TextEncoder().encode(`${accountId}:${pin}`);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return simpleHash(`${accountId}:${pin}`);
 }
 
 function simpleHash(value) {
@@ -126,7 +121,12 @@ function showApp(account) {
   loginScreen.hidden = true;
   appShell.hidden = false;
   activeAccountName.textContent = account.name;
-  maybeImportLegacyRecords(account);
+  try {
+    maybeImportLegacyRecords(account);
+  } catch (error) {
+    console.error(error);
+    statusText.textContent = "古い記録の取り込みをスキップしました";
+  }
   renderAll();
 }
 
@@ -135,7 +135,7 @@ function findAccountByName(name) {
   return loadAccounts().find((account) => accountNameKey(account.name) === key);
 }
 
-async function updateLegacyAccountPassword(existing, pinHash) {
+function updateLegacyAccountPassword(existing, pinHash) {
   const accounts = loadAccounts().map((account) => (
     account.id === existing.id ? { ...account, pinHash } : account
   ));
@@ -156,7 +156,7 @@ function validateCredentials(name, pin) {
   return { cleanName, pin };
 }
 
-async function loginAccount(name, pin) {
+function loginAccount(name, pin) {
   const credentials = validateCredentials(name, pin);
   if (!credentials) return;
   const { cleanName } = credentials;
@@ -166,9 +166,9 @@ async function loginAccount(name, pin) {
     return;
   }
 
-  const pinHash = await hashPin(existing.id, pin);
+  const pinHash = hashPin(existing.id, pin);
   if (!existing.pinHash) {
-    await updateLegacyAccountPassword(existing, pinHash);
+    updateLegacyAccountPassword(existing, pinHash);
     return;
   }
 
@@ -179,7 +179,7 @@ async function loginAccount(name, pin) {
   showApp(existing);
 }
 
-async function createAccount(name, pin) {
+function createAccount(name, pin) {
   const credentials = validateCredentials(name, pin);
   if (!credentials) return;
   const { cleanName } = credentials;
@@ -189,8 +189,8 @@ async function createAccount(name, pin) {
     return;
   }
   if (existing && !existing.pinHash) {
-    const pinHash = await hashPin(existing.id, pin);
-    await updateLegacyAccountPassword(existing, pinHash);
+    const pinHash = hashPin(existing.id, pin);
+    updateLegacyAccountPassword(existing, pinHash);
     return;
   }
 
@@ -200,7 +200,7 @@ async function createAccount(name, pin) {
     pinHash: "",
     createdAt: new Date().toISOString(),
   };
-  account.pinHash = await hashPin(account.id, pin);
+  account.pinHash = hashPin(account.id, pin);
   const accounts = loadAccounts();
   accounts.push(account);
   saveAccounts(accounts);

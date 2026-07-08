@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: rankaku-log
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATA_DIR
+        value: /var/data
+      - key: SESSION_SECRET
+        generateValue: true
+    disk:
+      name: rankaku-log-data
+      mountPath: /var/data
+      sizeGB: 1

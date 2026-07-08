@@ -1,8 +1,5 @@
-const LEGACY_STORAGE_KEY = "rankaku-log-v1";
-const ACCOUNT_LIST_KEY = "rankaku-log-accounts-v1";
-const SESSION_KEY = "rankaku-log-current-account-v1";
-const RECORD_PREFIX = "rankaku-log-records:";
-const LEGACY_IMPORT_PREFIX = "rankaku-log-legacy-imported:";
+const SESSION_KEY = "rankaku-log-auth-token-v1";
+const API_BASE = (window.RANKAKU_API_BASE || "").replace(/\/$/, "");
 const PLAYER_NAME = "zzz";
 const STAGES = [
   "シェケナダム",
@@ -44,6 +41,9 @@ const recordCount = $("recordCount");
 
 let selectedImageData = "";
 let activeAccount = null;
+let authToken = localStorage.getItem(SESSION_KEY) || "";
+let accountCache = [];
+let recordCache = [];
 
 function createId() {
   if (crypto.randomUUID) return crypto.randomUUID();
@@ -58,30 +58,33 @@ function accountNameKey(name) {
   return normalizeName(name).toLocaleLowerCase("ja-JP");
 }
 
-function loadAccounts() {
+async function apiRequest(path, options = {}) {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+  };
+  if (authToken && options.auth !== false) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
+
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers,
+  });
+  let payload = null;
   try {
-    return JSON.parse(localStorage.getItem(ACCOUNT_LIST_KEY) || "[]");
+    payload = await response.json();
   } catch {
-    return [];
+    payload = null;
   }
-}
-
-function saveAccounts(accounts) {
-  localStorage.setItem(ACCOUNT_LIST_KEY, JSON.stringify(accounts));
-}
-
-function hashPin(accountId, pin) {
-  if (!pin) return "";
-  return simpleHash(`${accountId}:${pin}`);
-}
-
-function simpleHash(value) {
-  let hash = 2166136261;
-  for (let i = 0; i < value.length; i += 1) {
-    hash ^= value.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
+  if (!response.ok) {
+    throw new Error(payload?.error || "サーバーに接続できません。");
   }
-  return `fallback-${(hash >>> 0).toString(16).padStart(8, "0")}`;
+  return payload;
+}
+
+function loadAccounts() {
+  return accountCache;
 }
 
 function setLoginMessage(message) {
@@ -107,41 +110,35 @@ function renderAccountList() {
   `;
 }
 
+async function refreshAccountList() {
+  const payload = await apiRequest("/api/accounts", { auth: false });
+  accountCache = payload.accounts || [];
+  renderAccountList();
+}
+
 function showLogin() {
   activeAccount = null;
-  sessionStorage.removeItem(SESSION_KEY);
+  authToken = "";
+  localStorage.removeItem(SESSION_KEY);
   loginScreen.hidden = false;
   appShell.hidden = true;
   accountPinInput.value = "";
   renderAccountList();
 }
 
-function showApp(account) {
+async function showApp(account) {
   activeAccount = account;
-  sessionStorage.setItem(SESSION_KEY, account.id);
   loginScreen.hidden = true;
   appShell.hidden = false;
   activeAccountName.textContent = account.name;
   try {
-    maybeImportLegacyRecords(account);
+    const payload = await apiRequest("/api/records");
+    recordCache = (payload.records || []).map(normalizeRecord);
   } catch (error) {
     console.error(error);
-    statusText.textContent = "古い記録の取り込みをスキップしました";
+    statusText.textContent = "記録の読み込みに失敗しました";
   }
   renderAll();
-}
-
-function findAccountByName(name) {
-  const key = accountNameKey(name);
-  return loadAccounts().find((account) => accountNameKey(account.name) === key);
-}
-
-function updateLegacyAccountPassword(existing, pinHash) {
-  const accounts = loadAccounts().map((account) => (
-    account.id === existing.id ? { ...account, pinHash } : account
-  ));
-  saveAccounts(accounts);
-  showApp({ ...existing, pinHash });
 }
 
 function validateCredentials(name, pin) {
@@ -157,72 +154,54 @@ function validateCredentials(name, pin) {
   return { cleanName, pin };
 }
 
-function loginAccount(name, pin) {
+async function loginAccount(name, pin) {
   const credentials = validateCredentials(name, pin);
   if (!credentials) return;
-  const { cleanName } = credentials;
-  const existing = findAccountByName(cleanName);
-  if (!existing) {
-    setLoginMessage("アカウントがありません。新規作成してください。");
-    return;
-  }
-
-  const pinHash = hashPin(existing.id, pin);
-  if (!existing.pinHash) {
-    updateLegacyAccountPassword(existing, pinHash);
-    return;
-  }
-
-  if (pinHash !== existing.pinHash) {
-    setLoginMessage("パスワードが違います。");
-    return;
-  }
-  showApp(existing);
+  const payload = await apiRequest("/api/login", {
+    method: "POST",
+    auth: false,
+    body: JSON.stringify({
+      name: credentials.cleanName,
+      password: pin,
+    }),
+  });
+  authToken = payload.token;
+  localStorage.setItem(SESSION_KEY, authToken);
+  await refreshAccountList();
+  await showApp(payload.account);
 }
 
-function createAccount(name, pin) {
+async function createAccount(name, pin) {
   const credentials = validateCredentials(name, pin);
   if (!credentials) return;
-  const { cleanName } = credentials;
-  const existing = findAccountByName(cleanName);
-  if (existing?.pinHash) {
-    setLoginMessage("このアカウント名はすでに使われています。ログインしてください。");
-    return;
-  }
-  if (existing && !existing.pinHash) {
-    const pinHash = hashPin(existing.id, pin);
-    updateLegacyAccountPassword(existing, pinHash);
-    return;
-  }
-
-  const account = {
-    id: createId(),
-    name: cleanName,
-    pinHash: "",
-    createdAt: new Date().toISOString(),
-  };
-  account.pinHash = hashPin(account.id, pin);
-  const accounts = loadAccounts();
-  accounts.push(account);
-  saveAccounts(accounts);
-  showApp(account);
+  const payload = await apiRequest("/api/signup", {
+    method: "POST",
+    auth: false,
+    body: JSON.stringify({
+      name: credentials.cleanName,
+      password: pin,
+    }),
+  });
+  authToken = payload.token;
+  localStorage.setItem(SESSION_KEY, authToken);
+  await refreshAccountList();
+  await showApp(payload.account);
 }
 
 function resetLocalData() {
-  const ok = confirm("この端末の乱獲ログのアカウントと記録をすべて削除しますか？");
+  const ok = confirm("この端末のログイン状態だけリセットしますか？サーバー上の記録は消えません。");
   if (!ok) return;
 
-  Object.keys(localStorage)
-    .filter((key) => key.startsWith("rankaku-log"))
-    .forEach((key) => localStorage.removeItem(key));
-  sessionStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(SESSION_KEY);
+  authToken = "";
   activeAccount = null;
+  recordCache = [];
   accountNameInput.value = "";
   accountPinInput.value = "";
   loginScreen.hidden = false;
   appShell.hidden = true;
   renderAccountList();
-  setLoginMessage("保存データをリセットしました。新規作成してください。");
+  setLoginMessage("この端末のログイン状態をリセットしました。");
 }
 
 function normalizeRecord(record) {
@@ -233,41 +212,16 @@ function normalizeRecord(record) {
   };
 }
 
-function recordsKey() {
-  return activeAccount ? `${RECORD_PREFIX}${activeAccount.id}` : LEGACY_STORAGE_KEY;
-}
-
-function parseRecordsFromKey(key) {
-  try {
-    return JSON.parse(localStorage.getItem(key) || "[]").map(normalizeRecord);
-  } catch {
-    return [];
-  }
-}
-
 function loadRecords() {
-  return parseRecordsFromKey(recordsKey());
+  return recordCache;
 }
 
-function saveRecords(records) {
-  localStorage.setItem(recordsKey(), JSON.stringify(records.map(normalizeRecord)));
-}
-
-function maybeImportLegacyRecords(account) {
-  const importedKey = `${LEGACY_IMPORT_PREFIX}${account.id}`;
-  if (localStorage.getItem(importedKey)) return;
-
-  const currentRecords = parseRecordsFromKey(`${RECORD_PREFIX}${account.id}`);
-  const legacyRecords = parseRecordsFromKey(LEGACY_STORAGE_KEY);
-  if (currentRecords.length > 0 || legacyRecords.length === 0) {
-    localStorage.setItem(importedKey, "1");
-    return;
-  }
-
-  if (confirm("未ログイン時代の記録があります。このアカウントに取り込みますか？")) {
-    localStorage.setItem(`${RECORD_PREFIX}${account.id}`, JSON.stringify(legacyRecords));
-  }
-  localStorage.setItem(importedKey, "1");
+async function saveRecords(records) {
+  recordCache = records.map(normalizeRecord);
+  await apiRequest("/api/records", {
+    method: "PUT",
+    body: JSON.stringify({ records: recordCache }),
+  });
 }
 
 function value(id) {
@@ -354,7 +308,7 @@ async function runAuth(action, loadingText) {
     await action();
   } catch (error) {
     console.error(error);
-    setLoginMessage("処理に失敗しました。もう一度試してください。");
+    setLoginMessage(error.message || "処理に失敗しました。もう一度試してください。");
   } finally {
     loginButton.disabled = false;
     createAccountButton.disabled = false;
@@ -455,9 +409,12 @@ saveButton.addEventListener("click", async () => {
 
     const records = loadRecords();
     records.push(record);
-    saveRecords(records);
+    await saveRecords(records);
     renderAll();
     statusText.textContent = "記録を保存しました";
+  } catch (error) {
+    console.error(error);
+    statusText.textContent = error.message || "記録の保存に失敗しました";
   } finally {
     saveButton.disabled = false;
   }
@@ -634,22 +591,46 @@ exportButton.addEventListener("click", () => {
   anchor.click();
 });
 
-clearButton.addEventListener("click", () => {
+clearButton.addEventListener("click", async () => {
   if (!confirm("このアカウントの記録をすべて削除しますか？")) return;
-  localStorage.removeItem(recordsKey());
-  renderAll();
-  statusText.textContent = "記録を削除しました";
+  clearButton.disabled = true;
+  try {
+    recordCache = [];
+    await apiRequest("/api/records", { method: "DELETE" });
+    renderAll();
+    statusText.textContent = "記録を削除しました";
+  } catch (error) {
+    console.error(error);
+    statusText.textContent = error.message || "記録の削除に失敗しました";
+  } finally {
+    clearButton.disabled = false;
+  }
 });
 
-function boot() {
-  renderAccountList();
-  const accounts = loadAccounts();
-  const sessionId = sessionStorage.getItem(SESSION_KEY);
-  const sessionAccount = accounts.find((account) => account.id === sessionId);
-  if (sessionAccount) {
-    showApp(sessionAccount);
-  } else {
+async function boot() {
+  loginButton.disabled = true;
+  createAccountButton.disabled = true;
+  resetLocalDataButton.disabled = true;
+  setLoginMessage("サーバーに接続中...");
+  try {
+    await refreshAccountList();
+    if (authToken) {
+      const payload = await apiRequest("/api/me");
+      await showApp(payload.account);
+      return;
+    }
     showLogin();
+    setLoginMessage("初めてなら新規作成、作成済みならログインしてください。");
+  } catch (error) {
+    console.error(error);
+    authToken = "";
+    localStorage.removeItem(SESSION_KEY);
+    showLogin();
+    setLoginMessage("サーバーに接続できません。RenderのURLで開いてください。");
+  } finally {
+    loginButton.disabled = false;
+    createAccountButton.disabled = false;
+    resetLocalDataButton.disabled = false;
   }
 }
 

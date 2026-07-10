@@ -263,6 +263,41 @@ h1 {
   margin-bottom: 12px;
 }
 
+.collapsiblePanel > .sectionTitle {
+  min-height: 48px;
+  margin: -4px -4px 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(183, 227, 75, .2);
+  border-radius: 8px;
+  background: rgba(183, 227, 75, .08);
+  cursor: pointer;
+  user-select: none;
+}
+
+.collapsiblePanel > .sectionTitle::after {
+  content: "";
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  margin-left: auto;
+  border-right: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform .18s ease;
+}
+
+.collapsiblePanel.collapsed > .sectionTitle {
+  margin-bottom: -4px;
+}
+
+.collapsiblePanel.collapsed > .sectionTitle::after {
+  transform: rotate(-45deg);
+}
+
+.collapsiblePanel.collapsed > .sectionTitle ~ * {
+  display: none !important;
+}
+
 .sectionTitle h2 {
   margin-bottom: 0;
   font-size: 17px;

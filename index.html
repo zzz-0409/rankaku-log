@@ -10,7 +10,7 @@
   <title>乱獲ログ</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="style.css?v=20260710-15" />
+  <link rel="stylesheet" href="style.css?v=20260710-16" />
 </head>
 <body>
   <section id="loginScreen" class="loginScreen">
@@ -78,7 +78,7 @@
 
     <main class="app">
       <div id="logView" class="view active">
-        <section class="panel">
+        <section class="panel collapsiblePanel">
           <div class="sectionTitle">
             <span class="step">1</span>
             <h2>スクショ読取</h2>
@@ -89,7 +89,6 @@
             <span>画像を選ぶ</span>
           </label>
 
-          <button id="ocrButton" class="primaryButton" type="button">画像を読み取る</button>
           <p id="status" class="status">画像を選んだら、薄いガイドに合わせて切り取ってください。1番上の自分の行だけ読み取ります。</p>
           <div id="cropEditor" class="cropEditor" hidden>
             <div class="cropFrame">
@@ -115,11 +114,12 @@
               </label>
             </div>
             <button id="applyCropButton" type="button">この形に切り取る</button>
+            <button id="ocrButton" class="primaryButton" type="button">画像を読み取る</button>
           </div>
           <img id="preview" alt="選択したスクリーンショットのプレビュー" />
         </section>
 
-        <section class="panel">
+        <section class="panel collapsiblePanel">
           <div class="sectionTitle">
             <span class="step">2</span>
             <h2>記録を確認</h2>
@@ -202,7 +202,7 @@
           <button id="saveButton" class="primaryButton" type="button">この記録を保存</button>
         </section>
 
-        <section class="panel">
+        <section class="panel collapsiblePanel">
           <div class="sectionTitle">
             <span class="step">3</span>
             <h2>ステージ平均</h2>
@@ -255,6 +255,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="main.js?v=20260710-19"></script>
+  <script src="main.js?v=20260710-20"></script>
 </body>
 </html>

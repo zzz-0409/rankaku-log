@@ -1307,6 +1307,23 @@ document.querySelectorAll(".viewTab").forEach((tab) => {
   tab.addEventListener("click", () => setView(tab.dataset.viewTarget));
 });
 
+document.querySelectorAll(".collapsiblePanel > .sectionTitle").forEach((title) => {
+  title.setAttribute("role", "button");
+  title.setAttribute("tabindex", "0");
+  title.setAttribute("aria-expanded", "true");
+  const togglePanel = () => {
+    const panel = title.closest(".collapsiblePanel");
+    const collapsed = panel.classList.toggle("collapsed");
+    title.setAttribute("aria-expanded", String(!collapsed));
+  };
+  title.addEventListener("click", togglePanel);
+  title.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    togglePanel();
+  });
+});
+
 $("recentRecords").addEventListener("click", async (event) => {
   const button = event.target.closest(".deleteRecordButton");
   if (!button) return;

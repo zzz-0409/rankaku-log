@@ -24,6 +24,9 @@ const TOP_ROW_RECTS = {
   rescue: { x: 614, y: 9, width: 70, height: 36 },
   death: { x: 614, y: 50, width: 70, height: 36 },
 };
+const SUMMARY_RECTS = {
+  teamDelivery: { x: 36, y: 207, width: 116, height: 43 },
+};
 
 const $ = (id) => document.getElementById(id);
 
@@ -216,9 +219,11 @@ function resetLocalData() {
 
 function normalizeRecord(record) {
   const delivery = Number(record.delivery ?? record.delivered ?? record.gold ?? 0);
+  const teamDelivery = Number(record.teamDelivery ?? record.totalDelivery ?? 0);
   return {
     ...record,
     delivery,
+    teamDelivery,
     waveType: record.waveType || "dayOnly",
     imageData: record.imageData || "",
   };
@@ -373,6 +378,7 @@ function fillFromTopRowOcr(reads) {
   const byLabel = Object.fromEntries(reads.map((read) => [read.label, read.text]));
   const goldNumbers = extractNumbers(byLabel.goldDelivery || "");
   const fields = {
+    teamDelivery: firstNumber(byLabel.teamDelivery || ""),
     gold: goldNumbers[0],
     delivery: goldNumbers[1],
     red: firstNumber(byLabel.red || ""),
@@ -392,6 +398,12 @@ async function readTopResultFromImage(file) {
   const { canvas: baseCanvas, context } = drawBaseImage(image);
   const rowTop = detectTopPlayerRow(context);
   const reads = [];
+
+  for (const [label, rect] of Object.entries(SUMMARY_RECTS)) {
+    statusText.textContent = `合計欄を読み取り中... ${label}`;
+    const crop = cropTopRowRegion(baseCanvas, 0, rect);
+    reads.push(await recognizeDigits(crop, label));
+  }
 
   for (const [label, rect] of Object.entries(TOP_ROW_RECTS)) {
     statusText.textContent = `1番上の行を読み取り中... ${label}`;
@@ -414,6 +426,7 @@ function autoFillFromText(text) {
   const likelyBoss = nums.find((n) => n >= 0 && n <= 80);
 
   setValue("delivery", likelyGold ?? 0);
+  setValue("teamDelivery", likelyGold ?? 0);
   setValue("gold", likelyGold ?? 0);
   setValue("red", likelyRed ?? 0);
   setValue("boss", likelyBoss ?? 0);
@@ -520,7 +533,7 @@ ocrButton.addEventListener("click", async () => {
   try {
     const topResult = await readTopResultFromImage(file);
     const readCount = Object.values(topResult.fields).filter(Number.isFinite).length;
-    const hasCoreNumbers = ["delivery", "gold", "red", "boss"].every((key) => (
+    const hasCoreNumbers = ["teamDelivery", "delivery", "gold", "red", "boss"].every((key) => (
       Number.isFinite(topResult.fields[key])
     ));
     rawText.textContent = [
@@ -570,6 +583,7 @@ saveButton.addEventListener("click", async () => {
       waveType: currentWaveType(),
       stage: $("stage").value,
       delivery: value("delivery"),
+      teamDelivery: value("teamDelivery"),
       gold: value("gold"),
       red: value("red"),
       boss: value("boss"),
@@ -642,7 +656,8 @@ function renderSummary() {
         <span class="statLabel">${escapeHtml(stage)} / ${WAVE_TYPES[waveType]}</span>
         <span class="statValue">${stageRecords.length}戦</span>
       </div>
-      ${stat("平均 納品数", avg(stageRecords, "delivery").toFixed(2), `最高 ${max(stageRecords, "delivery")}`)}
+      ${stat("平均 個人納品数", avg(stageRecords, "delivery").toFixed(2), `最高 ${max(stageRecords, "delivery")}`)}
+      ${stat("平均 合計納品数", avg(stageRecords, "teamDelivery").toFixed(2), `最高 ${max(stageRecords, "teamDelivery")}`)}
       ${stat("平均 金イクラ", avg(stageRecords, "gold").toFixed(2), `最高 ${max(stageRecords, "gold")}`)}
       ${stat("平均 赤イクラ", avg(stageRecords, "red").toFixed(2), `最高 ${max(stageRecords, "red")}`)}
       ${stat("平均 オオモノ", avg(stageRecords, "boss").toFixed(2), `最高 ${max(stageRecords, "boss")}`)}
@@ -651,7 +666,7 @@ function renderSummary() {
       <div class="statBox wide">
         <span class="statLabel">合計</span>
         <span class="statSub">
-          合計納品数 ${sum(stageRecords, "delivery")} / 合計金イクラ ${sum(stageRecords, "gold")} / 赤 ${sum(stageRecords, "red")} /
+          個人納品数 ${sum(stageRecords, "delivery")} / 合計納品数 ${sum(stageRecords, "teamDelivery")} / 金イクラ ${sum(stageRecords, "gold")} / 赤 ${sum(stageRecords, "red")} /
           オオモノ ${sum(stageRecords, "boss")} / 救助 ${sum(stageRecords, "rescue")} /
           デス ${sum(stageRecords, "death")}
         </span>
@@ -665,8 +680,8 @@ function totalCard(records, waveType) {
   return `
     <div class="totalCard">
       <span class="statLabel">${WAVE_TYPES[waveType]}</span>
-      <span class="statValue">${sum(filtered, "gold")}</span>
-      <span class="statSub">合計金イクラ / ${filtered.length}戦</span>
+      <span class="statValue">${sum(filtered, "teamDelivery")}</span>
+      <span class="statSub">合計納品数 / ${filtered.length}戦</span>
     </div>
   `;
 }
@@ -749,7 +764,7 @@ document.querySelectorAll('input[name="waveType"]').forEach((radio) => {
 
 exportButton.addEventListener("click", () => {
   const records = loadRecords();
-  const header = ["account", "date", "waveType", "stage", "delivery", "gold", "red", "boss", "rescue", "death", "hasImage"];
+  const header = ["account", "date", "waveType", "stage", "delivery", "teamDelivery", "gold", "red", "boss", "rescue", "death", "hasImage"];
   const rows = records.map((record) => header.map((key) => {
     if (key === "account") return JSON.stringify(activeAccount?.name ?? "");
     if (key === "hasImage") return JSON.stringify(Boolean(record.imageData));

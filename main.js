@@ -19,6 +19,7 @@ const OCR_BASE_HEIGHT = 1280;
 const TOP_ROW_FALLBACK_Y = 690;
 const TOP_ROW_RECTS = {
   boss: { x: 138, y: 48, width: 90, height: 36 },
+  deliveryPair: { x: 482, y: 6, width: 132, height: 46 },
   delivery: { x: 499, y: 8, width: 60, height: 42 },
   assistDelivery: { x: 550, y: 8, width: 60, height: 42 },
   red: { x: 482, y: 49, width: 118, height: 42 },
@@ -388,12 +389,44 @@ function firstNumber(text) {
   return extractNumbers(text)[0];
 }
 
+function firstNumberInRange(text, min, max) {
+  return extractNumbers(text).find((number) => number >= min && number <= max);
+}
+
+function parseDeliveryPair(text) {
+  const clean = String(text || "")
+    .replace(/[＜〈《‹]/g, "<")
+    .replace(/[＞〉》›]/g, ">")
+    .replace(/[（]/g, "(")
+    .replace(/[）]/g, ")")
+    .replace(/[［]/g, "[")
+    .replace(/[］]/g, "]");
+
+  const bracketed = clean.match(/(?:[xX]\s*)?(\d{1,3})\s*[<({\[]\s*(\d{1,2})/);
+  if (bracketed) {
+    return {
+      delivery: Number(bracketed[1]),
+      assistDelivery: Number(bracketed[2]),
+    };
+  }
+
+  const assistOnly = clean.match(/[<({\[]\s*(\d{1,2})/);
+  const numbers = extractNumbers(clean);
+  return {
+    delivery: numbers[0],
+    assistDelivery: assistOnly ? Number(assistOnly[1]) : numbers.find((number, index) => (
+      index > 0 && number >= 0 && number <= 99
+    )),
+  };
+}
+
 function fillFromTopRowOcr(reads) {
   const byLabel = Object.fromEntries(reads.map((read) => [read.label, read.text]));
+  const playerDelivery = parseDeliveryPair(byLabel.deliveryPair || "");
   const fields = {
     teamDelivery: firstNumber(byLabel.teamDelivery || ""),
-    delivery: firstNumber(byLabel.delivery || ""),
-    assistDelivery: firstNumber(byLabel.assistDelivery || ""),
+    delivery: playerDelivery.delivery ?? firstNumber(byLabel.delivery || ""),
+    assistDelivery: playerDelivery.assistDelivery ?? firstNumberInRange(byLabel.assistDelivery || "", 0, 99),
     red: firstNumber(byLabel.red || ""),
     boss: firstNumber(byLabel.boss || ""),
     rescue: firstNumber(byLabel.rescue || ""),

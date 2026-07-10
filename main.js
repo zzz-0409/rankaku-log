@@ -216,10 +216,12 @@ function resetLocalData() {
 
 function normalizeRecord(record) {
   const delivery = Number(record.delivery ?? record.delivered ?? 0);
+  const assistDelivery = Number(record.assistDelivery ?? record.assist ?? 0);
   const teamDelivery = Number(record.teamDelivery ?? record.totalDelivery ?? record.gold ?? 0);
   return {
     ...record,
     delivery,
+    assistDelivery,
     teamDelivery,
     waveType: record.waveType || "dayOnly",
     imageData: record.imageData || "",
@@ -373,12 +375,30 @@ function firstNumber(text) {
   return extractNumbers(text)[0];
 }
 
+function deliveryNumbers(text) {
+  const clean = String(text || "");
+  const exact = clean.match(/[xX]\s*(\d+)\s*[<({\[]\s*(\d+)/);
+  if (exact) {
+    return {
+      delivery: Number(exact[1]),
+      assistDelivery: Number(exact[2]),
+    };
+  }
+
+  const numbers = extractNumbers(clean);
+  return {
+    delivery: numbers[0],
+    assistDelivery: numbers[1],
+  };
+}
+
 function fillFromTopRowOcr(reads) {
   const byLabel = Object.fromEntries(reads.map((read) => [read.label, read.text]));
-  const goldNumbers = extractNumbers(byLabel.goldDelivery || "");
+  const playerDelivery = deliveryNumbers(byLabel.goldDelivery || "");
   const fields = {
     teamDelivery: firstNumber(byLabel.teamDelivery || ""),
-    delivery: goldNumbers[1],
+    delivery: playerDelivery.delivery,
+    assistDelivery: playerDelivery.assistDelivery,
     red: firstNumber(byLabel.red || ""),
     boss: firstNumber(byLabel.boss || ""),
     rescue: firstNumber(byLabel.rescue || ""),
@@ -424,6 +444,7 @@ function autoFillFromText(text) {
   const likelyBoss = nums.find((n) => n >= 0 && n <= 80);
 
   setValue("delivery", likelyGold ?? 0);
+  setValue("assistDelivery", 0);
   setValue("teamDelivery", likelyGold ?? 0);
   setValue("red", likelyRed ?? 0);
   setValue("boss", likelyBoss ?? 0);
@@ -573,6 +594,7 @@ saveButton.addEventListener("click", async () => {
       waveType: currentWaveType(),
       stage: $("stage").value,
       delivery: value("delivery"),
+      assistDelivery: value("assistDelivery"),
       teamDelivery: value("teamDelivery"),
       gold: 0,
       red: value("red"),
@@ -648,6 +670,7 @@ function renderSummary() {
       </div>
       ${stat("平均 合計納品数", avg(stageRecords, "teamDelivery").toFixed(2), `最高 ${max(stageRecords, "teamDelivery")}`)}
       ${stat("平均 個人納品数", avg(stageRecords, "delivery").toFixed(2), `最高 ${max(stageRecords, "delivery")}`)}
+      ${stat("平均 アシスト納品数", avg(stageRecords, "assistDelivery").toFixed(2), `最高 ${max(stageRecords, "assistDelivery")}`)}
       ${stat("平均 赤イクラ", avg(stageRecords, "red").toFixed(2), `最高 ${max(stageRecords, "red")}`)}
       ${stat("平均 オオモノ", avg(stageRecords, "boss").toFixed(2), `最高 ${max(stageRecords, "boss")}`)}
       ${stat("平均 救助", avg(stageRecords, "rescue").toFixed(2), `最高 ${max(stageRecords, "rescue")}`)}
@@ -655,7 +678,7 @@ function renderSummary() {
       <div class="statBox wide">
         <span class="statLabel">合計</span>
         <span class="statSub">
-          合計納品数 ${sum(stageRecords, "teamDelivery")} / 個人納品数 ${sum(stageRecords, "delivery")} / 赤イクラ ${sum(stageRecords, "red")} /
+          合計納品数 ${sum(stageRecords, "teamDelivery")} / 個人納品数 ${sum(stageRecords, "delivery")} / アシスト納品数 ${sum(stageRecords, "assistDelivery")} / 赤イクラ ${sum(stageRecords, "red")} /
           オオモノ ${sum(stageRecords, "boss")} / 救助 ${sum(stageRecords, "rescue")} /
           デス ${sum(stageRecords, "death")}
         </span>

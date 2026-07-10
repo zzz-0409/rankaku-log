@@ -745,15 +745,15 @@ function renderSummary() {
       <div class="statBox wide">
         <span class="statLabel">${escapeHtml(stage)} / ${WAVE_TYPES[waveType]}</span>
         <span class="statValue">${stageRecords.length}戦</span>
-        <span class="statSub">行動系平均はおかしらなし ${actionRecords.length}戦</span>
+        <span class="statSub">行動系平均はオカシラなし ${actionRecords.length}戦</span>
       </div>
       ${stat("平均 合計納品数", avg(stageRecords, "teamDelivery").toFixed(2), `最高 ${max(stageRecords, "teamDelivery")}`)}
       ${stat("平均 個人納品数", avg(stageRecords, "delivery").toFixed(2), `最高 ${max(stageRecords, "delivery")}`)}
       ${stat("平均 アシスト納品数", avg(stageRecords, "assistDelivery").toFixed(2), `最高 ${max(stageRecords, "assistDelivery")}`)}
-      ${stat("平均 赤イクラ", avg(actionRecords, "red").toFixed(2), `おかしらなし最高 ${max(actionRecords, "red")}`)}
-      ${stat("平均 オオモノ", avg(actionRecords, "boss").toFixed(2), `おかしらなし最高 ${max(actionRecords, "boss")}`)}
-      ${stat("平均 救助", avg(actionRecords, "rescue").toFixed(2), `おかしらなし最高 ${max(actionRecords, "rescue")}`)}
-      ${stat("平均 デス", avg(actionRecords, "death").toFixed(2), `おかしらなし最少 ${min(actionRecords, "death")}`)}
+      ${stat("平均 赤イクラ", avg(actionRecords, "red").toFixed(2), `オカシラなし最高 ${max(actionRecords, "red")}`)}
+      ${stat("平均 オオモノ", avg(actionRecords, "boss").toFixed(2), `オカシラなし最高 ${max(actionRecords, "boss")}`)}
+      ${stat("平均 救助", avg(actionRecords, "rescue").toFixed(2), `オカシラなし最高 ${max(actionRecords, "rescue")}`)}
+      ${stat("平均 デス", avg(actionRecords, "death").toFixed(2), `オカシラなし最少 ${min(actionRecords, "death")}`)}
       <div class="statBox wide">
         <span class="statLabel">合計</span>
         <span class="statSub">
@@ -773,15 +773,15 @@ function renderRecentAverage(recentRecords) {
       <div class="statBox wide">
         <span class="statLabel">対象</span>
         <span class="statValue">${recentRecords.length}戦</span>
-        <span class="statSub">行動系平均はおかしらなし ${actionRecords.length}戦</span>
+        <span class="statSub">行動系平均はオカシラなし ${actionRecords.length}戦</span>
       </div>
       ${stat("平均 合計納品数", avg(recentRecords, "teamDelivery").toFixed(2), `最高 ${max(recentRecords, "teamDelivery")}`)}
       ${stat("平均 個人納品数", avg(recentRecords, "delivery").toFixed(2), `最高 ${max(recentRecords, "delivery")}`)}
       ${stat("平均 アシスト", avg(recentRecords, "assistDelivery").toFixed(2), `最高 ${max(recentRecords, "assistDelivery")}`)}
-      ${stat("平均 赤イクラ", avg(actionRecords, "red").toFixed(2), `おかしらなし最高 ${max(actionRecords, "red")}`)}
-      ${stat("平均 オオモノ", avg(actionRecords, "boss").toFixed(2), `おかしらなし最高 ${max(actionRecords, "boss")}`)}
-      ${stat("平均 救助", avg(actionRecords, "rescue").toFixed(2), `おかしらなし最高 ${max(actionRecords, "rescue")}`)}
-      ${stat("平均 デス", avg(actionRecords, "death").toFixed(2), `おかしらなし最少 ${min(actionRecords, "death")}`)}
+      ${stat("平均 赤イクラ", avg(actionRecords, "red").toFixed(2), `オカシラなし最高 ${max(actionRecords, "red")}`)}
+      ${stat("平均 オオモノ", avg(actionRecords, "boss").toFixed(2), `オカシラなし最高 ${max(actionRecords, "boss")}`)}
+      ${stat("平均 救助", avg(actionRecords, "rescue").toFixed(2), `オカシラなし最高 ${max(actionRecords, "rescue")}`)}
+      ${stat("平均 デス", avg(actionRecords, "death").toFixed(2), `オカシラなし最少 ${min(actionRecords, "death")}`)}
     </div>
   `;
 }
@@ -790,7 +790,7 @@ function renderRecentRecord(record) {
   const image = record.imageData
     ? `<img src="${record.imageData}" alt="最近の記録画像" />`
     : `<div class="recentNoImage">画像なし</div>`;
-  const bossBadge = record.bossBattle ? `<span class="bossBattleBadge">おかしらあり</span>` : "";
+  const bossBadge = record.bossBattle ? `<span class="bossBattleBadge">オカシラあり</span>` : "";
 
   return `
     <article class="recentCard">

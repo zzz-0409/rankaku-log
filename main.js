@@ -661,7 +661,7 @@ function renderSummary() {
       <div class="statBox wide">
         <span class="statLabel">合計</span>
         <span class="statSub">
-          合計納品数 ${sum(stageRecords, "teamDelivery")} / 個人納品数 ${sum(stageRecords, "delivery")} / アシスト納品数 ${sum(stageRecords, "assistDelivery")} / 赤イクラ ${sum(stageRecords, "red")} /
+          最高合計納品数 ${max(stageRecords, "teamDelivery")} / 個人納品数 ${sum(stageRecords, "delivery")} / アシスト納品数 ${sum(stageRecords, "assistDelivery")} / 赤イクラ ${sum(stageRecords, "red")} /
           オオモノ ${sum(stageRecords, "boss")} / 救助 ${sum(stageRecords, "rescue")} /
           デス ${sum(stageRecords, "death")}
         </span>
@@ -675,8 +675,8 @@ function totalCard(records, waveType) {
   return `
     <div class="totalCard">
       <span class="statLabel">${WAVE_TYPES[waveType]}</span>
-      <span class="statValue">${sum(filtered, "teamDelivery")}</span>
-      <span class="statSub">合計納品数 / ${filtered.length}戦</span>
+      <span class="statValue">${max(filtered, "teamDelivery")}</span>
+      <span class="statSub">最高合計納品数 / ${filtered.length}戦</span>
     </div>
   `;
 }

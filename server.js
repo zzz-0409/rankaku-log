@@ -7,11 +7,14 @@ const { URL } = require("node:url");
 const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
 const DATA_FILE = path.join(DATA_DIR, "rankaku-log.json");
+const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const SESSION_SECRET = process.env.SESSION_SECRET || "dev-rankaku-log-secret";
 const MAX_BODY_BYTES = 25 * 1024 * 1024;
 const STATIC_ROOT = __dirname;
 
 let writeQueue = Promise.resolve();
+const usesSupabase = Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -97,7 +100,83 @@ async function ensureDataFile() {
   }
 }
 
+async function supabaseRequest(pathname, options = {}) {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1${pathname}`, {
+    ...options,
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+  const text = await response.text();
+  const payload = text ? JSON.parse(text) : null;
+  if (!response.ok) {
+    const message = payload?.message || payload?.error || "Supabaseに接続できません。";
+    throw new Error(message);
+  }
+  return payload;
+}
+
+function fromDbAccount(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    nameKey: row.name_key,
+    salt: row.salt,
+    passwordHash: row.password_hash,
+    createdAt: row.created_at,
+  };
+}
+
+function toDbAccount(account) {
+  return {
+    id: account.id,
+    name: account.name,
+    name_key: account.nameKey || accountNameKey(account.name),
+    salt: account.salt,
+    password_hash: account.passwordHash,
+    created_at: account.createdAt,
+  };
+}
+
+async function readSupabaseStore() {
+  const [accountRows, recordRows] = await Promise.all([
+    supabaseRequest("/rankaku_accounts?select=id,name,name_key,salt,password_hash,created_at&order=created_at.asc"),
+    supabaseRequest("/rankaku_records?select=account_id,records"),
+  ]);
+  return {
+    accounts: accountRows.map(fromDbAccount),
+    records: Object.fromEntries(recordRows.map((row) => [row.account_id, row.records || []])),
+  };
+}
+
+async function writeSupabaseStore(store) {
+  if (store.accounts.length > 0) {
+    await supabaseRequest("/rankaku_accounts?on_conflict=id", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates" },
+      body: JSON.stringify(store.accounts.map(toDbAccount)),
+    });
+  }
+
+  const recordRows = Object.entries(store.records).map(([accountId, records]) => ({
+    account_id: accountId,
+    records,
+  }));
+  if (recordRows.length > 0) {
+    await supabaseRequest("/rankaku_records?on_conflict=account_id", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates" },
+      body: JSON.stringify(recordRows),
+    });
+  }
+}
+
 async function readStore() {
+  if (usesSupabase) return readSupabaseStore();
+
   await ensureDataFile();
   try {
     const raw = await fs.readFile(DATA_FILE, "utf8");
@@ -112,6 +191,11 @@ async function readStore() {
 }
 
 function writeStore(store) {
+  if (usesSupabase) {
+    writeQueue = writeQueue.then(() => writeSupabaseStore(store));
+    return writeQueue;
+  }
+
   writeQueue = writeQueue.then(async () => {
     await ensureDataFile();
     const tmp = `${DATA_FILE}.tmp`;

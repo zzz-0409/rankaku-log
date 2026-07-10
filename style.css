@@ -182,13 +182,27 @@ h1 {
   white-space: nowrap;
 }
 
-.iconButton {
-  width: 36px;
-  min-height: 36px;
+.logoutIconButton {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  min-width: 42px;
+  min-height: 42px;
+  border: 0;
   border-radius: 999px;
   padding: 0;
-  color: var(--muted);
-  font-size: 13px;
+  background: transparent;
+  filter: drop-shadow(0 3px 7px rgba(0, 0, 0, .35));
+}
+
+.logoutIconButton svg {
+  width: 40px;
+  height: 40px;
+  display: block;
+}
+
+.logoutIconButton:active {
+  transform: translateY(1px) scale(.97);
 }
 
 .viewTabs {

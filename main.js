@@ -508,7 +508,11 @@ accountList.addEventListener("click", (event) => {
   accountPinInput.focus();
 });
 
-logoutButton.addEventListener("click", showLogin);
+logoutButton.addEventListener("click", () => {
+  if (confirm("ログアウトしますか？")) {
+    showLogin();
+  }
+});
 
 imageInput.addEventListener("change", async () => {
   const file = imageInput.files[0];

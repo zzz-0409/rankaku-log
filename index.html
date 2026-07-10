@@ -10,7 +10,7 @@
   <title>乱獲ログ</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="style.css?v=20260710-10" />
+  <link rel="stylesheet" href="style.css?v=20260710-11" />
 </head>
 <body>
   <section id="loginScreen" class="loginScreen">
@@ -44,7 +44,29 @@
       <div class="accountBar">
         <span id="activeAccountName" class="accountPill"></span>
         <span id="recordCount" class="recordCount">0件</span>
-        <button id="logoutButton" class="iconButton" type="button" aria-label="ログアウト">出</button>
+        <button id="logoutButton" class="logoutIconButton" type="button" aria-label="ログアウト" title="ログアウト">
+          <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+            <defs>
+              <linearGradient id="logoutRing" x1="12" x2="52" y1="8" y2="56">
+                <stop offset="0" stop-color="#f7f7f7" />
+                <stop offset="0.28" stop-color="#7a7a7a" />
+                <stop offset="0.58" stop-color="#ffffff" />
+                <stop offset="1" stop-color="#4e4e4e" />
+              </linearGradient>
+              <radialGradient id="logoutGreen" cx="34%" cy="22%" r="78%">
+                <stop offset="0" stop-color="#d9ffbf" />
+                <stop offset="0.35" stop-color="#64c63b" />
+                <stop offset="1" stop-color="#168300" />
+              </radialGradient>
+            </defs>
+            <circle cx="32" cy="32" r="30" fill="url(#logoutRing)" />
+            <circle cx="32" cy="32" r="24" fill="url(#logoutGreen)" />
+            <path d="M38 20h10v24H38" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="5" />
+            <path d="M36 32H17" fill="none" stroke="#fff" stroke-linecap="round" stroke-width="6" />
+            <path d="M20 22 10 32l10 10" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="6" />
+            <path d="M17 13a25 25 0 0 1 35 9" fill="none" stroke="#fff" stroke-linecap="round" stroke-opacity=".45" stroke-width="3" />
+          </svg>
+        </button>
       </div>
     </header>
 
@@ -196,6 +218,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="main.js?v=20260710-11"></script>
+  <script src="main.js?v=20260710-12"></script>
 </body>
 </html>

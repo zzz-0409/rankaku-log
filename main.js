@@ -14,6 +14,16 @@ const WAVE_TYPES = {
   dayOnly: "昼のみ",
   nightAny: "夜あり",
 };
+const OCR_BASE_WIDTH = 720;
+const OCR_BASE_HEIGHT = 1280;
+const TOP_ROW_FALLBACK_Y = 690;
+const TOP_ROW_RECTS = {
+  boss: { x: 138, y: 48, width: 90, height: 36 },
+  goldDelivery: { x: 482, y: 8, width: 122, height: 42 },
+  red: { x: 482, y: 49, width: 118, height: 42 },
+  rescue: { x: 614, y: 9, width: 70, height: 36 },
+  death: { x: 614, y: 50, width: 70, height: 36 },
+};
 
 const $ = (id) => document.getElementById(id);
 
@@ -252,6 +262,147 @@ function extractNumbers(text) {
   return [...text.matchAll(/\d+/g)].map((match) => Number(match[0]));
 }
 
+function loadImageFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = URL.createObjectURL(file);
+  });
+}
+
+function drawBaseImage(image) {
+  const canvas = document.createElement("canvas");
+  canvas.width = OCR_BASE_WIDTH;
+  canvas.height = OCR_BASE_HEIGHT;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return { canvas, context };
+}
+
+function detectTopPlayerRow(context) {
+  const startY = 610;
+  const endY = 835;
+  const minRedPixels = 430;
+  let bestY = TOP_ROW_FALLBACK_Y;
+  let streak = 0;
+
+  for (let y = startY; y < endY; y += 1) {
+    const { data } = context.getImageData(0, y, OCR_BASE_WIDTH, 1);
+    let redPixels = 0;
+    for (let x = 0; x < OCR_BASE_WIDTH; x += 1) {
+      const index = x * 4;
+      const r = data[index];
+      const g = data[index + 1];
+      const b = data[index + 2];
+      if (r > 160 && g > 40 && g < 105 && b > 20 && b < 90) {
+        redPixels += 1;
+      }
+    }
+    if (redPixels > minRedPixels) {
+      streak += 1;
+      if (streak === 5) {
+        bestY = y - 4;
+        break;
+      }
+    } else {
+      streak = 0;
+    }
+  }
+
+  return bestY;
+}
+
+function cropTopRowRegion(baseCanvas, rowTop, rect) {
+  const source = {
+    x: rect.x,
+    y: rowTop + rect.y,
+    width: rect.width,
+    height: rect.height,
+  };
+  const scale = 4;
+  const canvas = document.createElement("canvas");
+  canvas.width = source.width * scale;
+  canvas.height = source.height * scale;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.imageSmoothingEnabled = false;
+  context.drawImage(
+    baseCanvas,
+    source.x,
+    source.y,
+    source.width,
+    source.height,
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const { data } = imageData;
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    const brightness = (r + g + b) / 3;
+    const isText = brightness > 130 && Math.max(r, g, b) - Math.min(r, g, b) < 95;
+    const value = isText ? 0 : 255;
+    data[i] = value;
+    data[i + 1] = value;
+    data[i + 2] = value;
+  }
+  context.putImageData(imageData, 0, 0);
+  return canvas;
+}
+
+async function recognizeDigits(canvas, label) {
+  const result = await Tesseract.recognize(canvas, "eng", {
+    tessedit_char_whitelist: "0123456789xX<>()[]{}",
+  });
+  return {
+    label,
+    text: result.data.text.replace(/\s+/g, " ").trim(),
+  };
+}
+
+function firstNumber(text) {
+  return extractNumbers(text)[0];
+}
+
+function fillFromTopRowOcr(reads) {
+  const byLabel = Object.fromEntries(reads.map((read) => [read.label, read.text]));
+  const goldNumbers = extractNumbers(byLabel.goldDelivery || "");
+  const fields = {
+    gold: goldNumbers[0],
+    delivery: goldNumbers[1],
+    red: firstNumber(byLabel.red || ""),
+    boss: firstNumber(byLabel.boss || ""),
+    rescue: firstNumber(byLabel.rescue || ""),
+    death: firstNumber(byLabel.death || ""),
+  };
+
+  Object.entries(fields).forEach(([id, number]) => {
+    if (Number.isFinite(number)) setValue(id, number);
+  });
+  return fields;
+}
+
+async function readTopResultFromImage(file) {
+  const image = await loadImageFromFile(file);
+  const { canvas: baseCanvas, context } = drawBaseImage(image);
+  const rowTop = detectTopPlayerRow(context);
+  const reads = [];
+
+  for (const [label, rect] of Object.entries(TOP_ROW_RECTS)) {
+    statusText.textContent = `1番上の行を読み取り中... ${label}`;
+    const crop = cropTopRowRegion(baseCanvas, rowTop, rect);
+    reads.push(await recognizeDigits(crop, label));
+  }
+
+  const fields = fillFromTopRowOcr(reads);
+  return { rowTop, reads, fields };
+}
+
 function autoFillFromText(text) {
   const lines = text.split(/\n/).map((line) => line.trim()).filter(Boolean);
   const zzzIndex = lines.findIndex((line) => line.toLowerCase().includes(PLAYER_NAME));
@@ -367,6 +518,22 @@ ocrButton.addEventListener("click", async () => {
   rawText.textContent = "";
 
   try {
+    const topResult = await readTopResultFromImage(file);
+    const readCount = Object.values(topResult.fields).filter(Number.isFinite).length;
+    const hasCoreNumbers = ["delivery", "gold", "red", "boss"].every((key) => (
+      Number.isFinite(topResult.fields[key])
+    ));
+    rawText.textContent = [
+      `top row y=${topResult.rowTop}`,
+      ...topResult.reads.map((read) => `${read.label}: ${read.text}`),
+    ].join("\n");
+
+    if (hasCoreNumbers && readCount >= 4) {
+      statusText.textContent = "1番上の行を読み取りました。数字を確認してください。";
+      return;
+    }
+
+    statusText.textContent = "固定位置で読めなかったため、全文OCRに切り替えます...";
     const result = await Tesseract.recognize(file, "eng+jpn", {
       logger: (message) => {
         if (message.status) {
@@ -377,7 +544,7 @@ ocrButton.addEventListener("click", async () => {
     });
 
     const text = result.data.text;
-    rawText.textContent = text;
+    rawText.textContent = `${rawText.textContent}\n\nfallback:\n${text}`;
     autoFillFromText(text);
     statusText.textContent = "読み取り完了。数字を確認してください。";
   } catch (error) {

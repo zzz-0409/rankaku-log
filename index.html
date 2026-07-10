@@ -89,7 +89,7 @@
             <span>画像を選ぶ</span>
           </label>
 
-          <p id="status" class="status">画像を選んだら、薄いガイドに合わせて切り取ってください。1番上の自分の行だけ読み取ります。</p>
+          <p id="status" class="status">画像を選んだら、切り取り読み取りか、そのまま読み取りを選べます。1番上の自分の行だけ読み取ります。</p>
           <div id="cropEditor" class="cropEditor" hidden>
             <div class="cropFrame">
               <canvas id="cropCanvas"></canvas>
@@ -115,6 +115,7 @@
             </div>
             <button id="applyCropButton" type="button">この形に切り取る</button>
             <button id="ocrButton" class="primaryButton" type="button">画像を読み取る</button>
+            <button id="originalOcrButton" type="button">切り取らずに読み取る</button>
           </div>
           <img id="preview" alt="選択したスクリーンショットのプレビュー" />
         </section>
@@ -265,6 +266,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="main.js?v=20260710-24"></script>
+  <script src="main.js?v=20260710-25"></script>
 </body>
 </html>

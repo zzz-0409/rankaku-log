@@ -87,6 +87,7 @@ const cropZoom = $("cropZoom");
 const cropX = $("cropX");
 const cropY = $("cropY");
 const applyCropButton = $("applyCropButton");
+const originalOcrButton = $("originalOcrButton");
 const imageModal = $("imageModal");
 const imageModalTitle = $("imageModalTitle");
 const expandedImage = $("expandedImage");
@@ -95,6 +96,8 @@ const closeImageModal = $("closeImageModal");
 let selectedImageData = "";
 let croppedImageBlob = null;
 let cropSourceImage = null;
+let lastImageSource = "";
+let lastOcrResult = null;
 let activeAccount = null;
 let authToken = localStorage.getItem(SESSION_KEY) || "";
 let accountCache = [];
@@ -296,10 +299,50 @@ function setValue(id, n) {
   if (element && Number.isFinite(n)) element.value = n;
 }
 
+function currentNumberFields() {
+  return {
+    delivery: value("delivery"),
+    assistDelivery: value("assistDelivery"),
+    teamDelivery: value("teamDelivery"),
+    red: value("red"),
+    boss: value("boss"),
+    rescue: value("rescue"),
+    death: value("death"),
+  };
+}
+
+function buildOcrTrainingData(correctedFields) {
+  if (!lastOcrResult) return null;
+  const ocrFields = lastOcrResult.fields || {};
+  const changedFields = {};
+  Object.entries(correctedFields).forEach(([key, saved]) => {
+    const read = Number(ocrFields[key]);
+    if (!Number.isFinite(read) || read !== saved) {
+      changedFields[key] = {
+        read: Number.isFinite(read) ? read : null,
+        saved,
+      };
+    }
+  });
+
+  return {
+    source: lastOcrResult.source,
+    readAt: lastOcrResult.readAt,
+    rowTop: lastOcrResult.rowTop ?? null,
+    profile: lastOcrResult.profile || "",
+    ocrFields,
+    correctedFields,
+    changedFields,
+    reads: lastOcrResult.reads || [],
+  };
+}
+
 function resetRecordForm() {
   selectedImageData = "";
   croppedImageBlob = null;
   cropSourceImage = null;
+  lastImageSource = "";
+  lastOcrResult = null;
   imageInput.value = "";
   cropEditor.hidden = true;
   preview.removeAttribute("src");
@@ -385,6 +428,7 @@ async function applyCurrentCrop() {
   if (!blob) return null;
 
   croppedImageBlob = blob;
+  lastImageSource = "cropped";
   selectedImageData = cropCanvas.toDataURL("image/jpeg", 0.76);
   preview.src = selectedImageData;
   preview.style.display = "block";
@@ -392,7 +436,8 @@ async function applyCurrentCrop() {
   return blob;
 }
 
-async function getOcrImageSource() {
+async function getOcrImageSource(useOriginal = false) {
+  if (useOriginal) return imageInput.files[0];
   if (cropSourceImage) return croppedImageBlob;
   return croppedImageBlob || imageInput.files[0];
 }
@@ -856,6 +901,85 @@ function autoFillFromText(text) {
   setValue("boss", likelyBoss ?? 0);
 }
 
+function rememberOcrResult(source, result, extra = {}) {
+  lastOcrResult = {
+    source,
+    readAt: new Date().toISOString(),
+    rowTop: result?.rowTop ?? null,
+    profile: result?.profile ? `${result.profile.width}x${result.profile.height}` : "",
+    fields: { ...(result?.fields || currentNumberFields()) },
+    reads: (result?.reads || []).map((read) => ({
+      label: read.label,
+      text: read.text || "",
+      gameFontText: read.gameFontText || "",
+    })),
+    ...extra,
+  };
+}
+
+async function runImageRead(useOriginal = false) {
+  if (!imageInput.files[0]) {
+    alert("スクショを選択してください。");
+    return;
+  }
+
+  if (!useOriginal && cropSourceImage && !croppedImageBlob) {
+    alert("先にガイド枠に合わせて「この形に切り取る」を押してください。");
+    statusText.textContent = "ガイド枠に合わせて切り取りを確定するか、「切り取らずに読み取る」を使ってください。";
+    return;
+  }
+
+  const activeButton = useOriginal ? originalOcrButton : ocrButton;
+  activeButton.disabled = true;
+  statusText.textContent = useOriginal ? "元画像を読み取り中..." : "切り取り画像を読み取り中...";
+
+  try {
+    const ocrSource = await getOcrImageSource(useOriginal);
+    if (useOriginal) {
+      selectedImageData = "";
+      preview.src = URL.createObjectURL(imageInput.files[0]);
+      preview.style.display = "block";
+    }
+    const topResult = await readTopResultFromImage(ocrSource);
+    const sourceName = useOriginal ? "original" : "cropped";
+    rememberOcrResult(sourceName, topResult);
+    lastImageSource = sourceName;
+    const readCount = Object.values(topResult.fields).filter(Number.isFinite).length;
+    const hasCoreNumbers = ["teamDelivery", "delivery", "red", "boss"].every((key) => (
+      Number.isFinite(topResult.fields[key])
+    ));
+    if (hasCoreNumbers && readCount >= 4) {
+      statusText.textContent = "1番上の行を読み取りました。数字を確認してください。";
+      return;
+    }
+
+    statusText.textContent = "固定位置で読めなかったため、全文OCRに切り替えます...";
+    const result = await Tesseract.recognize(ocrSource, "eng+jpn", {
+      logger: (message) => {
+        if (message.status) {
+          const pct = message.progress ? ` ${Math.round(message.progress * 100)}%` : "";
+          statusText.textContent = `${message.status}${pct}`;
+        }
+      },
+    });
+
+    const text = result.data.text;
+    autoFillFromText(text);
+    rememberOcrResult(`${sourceName}-fallback`, {
+      fields: currentNumberFields(),
+      reads: [{ label: "fallback", text }],
+    });
+    lastImageSource = sourceName;
+    statusText.textContent = "読み取り完了。数字を確認してください。";
+  } catch (error) {
+    console.error(error);
+    statusText.textContent = "読み取りに失敗しました";
+    alert("OCRに失敗しました。手入力で記録してください。");
+  } finally {
+    activeButton.disabled = false;
+  }
+}
+
 function updateRecordCount() {
   const count = loadRecords().length;
   recordCount.textContent = `${count}件`;
@@ -942,6 +1066,8 @@ imageInput.addEventListener("change", async () => {
   if (!file) return;
 
   croppedImageBlob = null;
+  lastImageSource = "";
+  lastOcrResult = null;
   cropSourceImage = await loadImageFromFile(file);
   cropZoom.value = "100";
   cropX.value = "0";
@@ -957,6 +1083,8 @@ imageInput.addEventListener("change", async () => {
 [cropZoom, cropX, cropY].forEach((control) => {
   control.addEventListener("input", () => {
     croppedImageBlob = null;
+    selectedImageData = "";
+    lastImageSource = "";
     drawCropPreview();
   });
 });
@@ -970,6 +1098,15 @@ applyCropButton.addEventListener("click", async () => {
   }
 });
 
+ocrButton.addEventListener("click", () => {
+  runImageRead(false);
+});
+
+originalOcrButton.addEventListener("click", () => {
+  runImageRead(true);
+});
+
+/*
 ocrButton.addEventListener("click", async () => {
   if (!imageInput.files[0]) {
     alert("スクショを選択してください。");
@@ -1018,33 +1155,34 @@ ocrButton.addEventListener("click", async () => {
     ocrButton.disabled = false;
   }
 });
+*/
 
 saveButton.addEventListener("click", async () => {
   saveButton.disabled = true;
 
   try {
-    if (!selectedImageData && imageInput.files[0] && cropSourceImage) {
-      await applyCurrentCrop();
-    }
     if (!selectedImageData && imageInput.files[0]) {
       selectedImageData = await fileToCompressedDataUrl(imageInput.files[0]);
     }
 
+    const correctedFields = currentNumberFields();
     const record = {
       id: createId(),
       date: new Date().toISOString(),
       waveType: currentWaveType(),
       bossBattle: currentBossBattle(),
       stage: $("stage").value,
-      delivery: value("delivery"),
-      assistDelivery: value("assistDelivery"),
-      teamDelivery: value("teamDelivery"),
+      delivery: correctedFields.delivery,
+      assistDelivery: correctedFields.assistDelivery,
+      teamDelivery: correctedFields.teamDelivery,
       gold: 0,
-      red: value("red"),
-      boss: value("boss"),
-      rescue: value("rescue"),
-      death: value("death"),
+      red: correctedFields.red,
+      boss: correctedFields.boss,
+      rescue: correctedFields.rescue,
+      death: correctedFields.death,
       imageData: selectedImageData,
+      imageSource: lastImageSource || (croppedImageBlob ? "cropped" : "original"),
+      ocrTraining: buildOcrTrainingData(correctedFields),
     };
 
     const records = loadRecords();

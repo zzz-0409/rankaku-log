@@ -218,8 +218,8 @@ function resetLocalData() {
 }
 
 function normalizeRecord(record) {
-  const delivery = Number(record.delivery ?? record.delivered ?? record.gold ?? 0);
-  const teamDelivery = Number(record.teamDelivery ?? record.totalDelivery ?? 0);
+  const delivery = Number(record.delivery ?? record.delivered ?? 0);
+  const teamDelivery = Number(record.teamDelivery ?? record.totalDelivery ?? record.gold ?? 0);
   return {
     ...record,
     delivery,
@@ -242,11 +242,13 @@ async function saveRecords(records) {
 }
 
 function value(id) {
-  return Number($(id).value || 0);
+  const element = $(id);
+  return Number(element?.value || 0);
 }
 
 function setValue(id, n) {
-  if (Number.isFinite(n)) $(id).value = n;
+  const element = $(id);
+  if (element && Number.isFinite(n)) element.value = n;
 }
 
 function currentWaveType() {
@@ -379,7 +381,6 @@ function fillFromTopRowOcr(reads) {
   const goldNumbers = extractNumbers(byLabel.goldDelivery || "");
   const fields = {
     teamDelivery: firstNumber(byLabel.teamDelivery || ""),
-    gold: goldNumbers[0],
     delivery: goldNumbers[1],
     red: firstNumber(byLabel.red || ""),
     boss: firstNumber(byLabel.boss || ""),
@@ -427,7 +428,6 @@ function autoFillFromText(text) {
 
   setValue("delivery", likelyGold ?? 0);
   setValue("teamDelivery", likelyGold ?? 0);
-  setValue("gold", likelyGold ?? 0);
   setValue("red", likelyRed ?? 0);
   setValue("boss", likelyBoss ?? 0);
 }
@@ -533,7 +533,7 @@ ocrButton.addEventListener("click", async () => {
   try {
     const topResult = await readTopResultFromImage(file);
     const readCount = Object.values(topResult.fields).filter(Number.isFinite).length;
-    const hasCoreNumbers = ["teamDelivery", "delivery", "gold", "red", "boss"].every((key) => (
+    const hasCoreNumbers = ["teamDelivery", "delivery", "red", "boss"].every((key) => (
       Number.isFinite(topResult.fields[key])
     ));
     rawText.textContent = [
@@ -584,7 +584,7 @@ saveButton.addEventListener("click", async () => {
       stage: $("stage").value,
       delivery: value("delivery"),
       teamDelivery: value("teamDelivery"),
-      gold: value("gold"),
+      gold: 0,
       red: value("red"),
       boss: value("boss"),
       rescue: value("rescue"),
@@ -624,10 +624,10 @@ function min(records, key) {
   return Math.min(...records.map((record) => Number(record[key] || 0)));
 }
 
-function bestByDelivery(records) {
+function bestByTeamDelivery(records) {
   return records.reduce((best, record) => {
     if (!best) return record;
-    if (Number(record.delivery || 0) > Number(best.delivery || 0)) return record;
+    if (Number(record.teamDelivery || 0) > Number(best.teamDelivery || 0)) return record;
     return best;
   }, null);
 }
@@ -656,9 +656,8 @@ function renderSummary() {
         <span class="statLabel">${escapeHtml(stage)} / ${WAVE_TYPES[waveType]}</span>
         <span class="statValue">${stageRecords.length}戦</span>
       </div>
-      ${stat("平均 個人納品数", avg(stageRecords, "delivery").toFixed(2), `最高 ${max(stageRecords, "delivery")}`)}
       ${stat("平均 合計納品数", avg(stageRecords, "teamDelivery").toFixed(2), `最高 ${max(stageRecords, "teamDelivery")}`)}
-      ${stat("平均 金イクラ", avg(stageRecords, "gold").toFixed(2), `最高 ${max(stageRecords, "gold")}`)}
+      ${stat("平均 個人納品数", avg(stageRecords, "delivery").toFixed(2), `最高 ${max(stageRecords, "delivery")}`)}
       ${stat("平均 赤イクラ", avg(stageRecords, "red").toFixed(2), `最高 ${max(stageRecords, "red")}`)}
       ${stat("平均 オオモノ", avg(stageRecords, "boss").toFixed(2), `最高 ${max(stageRecords, "boss")}`)}
       ${stat("平均 救助", avg(stageRecords, "rescue").toFixed(2), `最高 ${max(stageRecords, "rescue")}`)}
@@ -666,7 +665,7 @@ function renderSummary() {
       <div class="statBox wide">
         <span class="statLabel">合計</span>
         <span class="statSub">
-          個人納品数 ${sum(stageRecords, "delivery")} / 合計納品数 ${sum(stageRecords, "teamDelivery")} / 金イクラ ${sum(stageRecords, "gold")} / 赤 ${sum(stageRecords, "red")} /
+          合計納品数 ${sum(stageRecords, "teamDelivery")} / 個人納品数 ${sum(stageRecords, "delivery")} / 赤イクラ ${sum(stageRecords, "red")} /
           オオモノ ${sum(stageRecords, "boss")} / 救助 ${sum(stageRecords, "rescue")} /
           デス ${sum(stageRecords, "death")}
         </span>
@@ -708,8 +707,8 @@ function renderBestCard(stage, best) {
       <div class="bestMeta">
         <h3>${escapeHtml(stage)}</h3>
         <div class="bestScore">
-          <span>最高納品数</span>
-          <b>${Number(best.delivery || 0)}</b>
+          <span>最高合計納品数</span>
+          <b>${Number(best.teamDelivery || 0)}</b>
         </div>
       </div>
     </article>
@@ -731,7 +730,7 @@ function renderBestSummary() {
       const stageRecords = records.filter((record) => (
         record.waveType === waveType && record.stage === stage
       ));
-      return renderBestCard(stage, bestByDelivery(stageRecords));
+      return renderBestCard(stage, bestByTeamDelivery(stageRecords));
     }).join("");
   });
 }
@@ -764,7 +763,7 @@ document.querySelectorAll('input[name="waveType"]').forEach((radio) => {
 
 exportButton.addEventListener("click", () => {
   const records = loadRecords();
-  const header = ["account", "date", "waveType", "stage", "delivery", "teamDelivery", "gold", "red", "boss", "rescue", "death", "hasImage"];
+  const header = ["account", "date", "waveType", "stage", "teamDelivery", "delivery", "red", "boss", "rescue", "death", "hasImage"];
   const rows = records.map((record) => header.map((key) => {
     if (key === "account") return JSON.stringify(activeAccount?.name ?? "");
     if (key === "hasImage") return JSON.stringify(Boolean(record.imageData));

@@ -10,7 +10,7 @@
   <title>乱獲ログ</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="style.css?v=20260710-14" />
+  <link rel="stylesheet" href="style.css?v=20260710-15" />
 </head>
 <body>
   <section id="loginScreen" class="loginScreen">
@@ -90,7 +90,32 @@
           </label>
 
           <button id="ocrButton" class="primaryButton" type="button">画像を読み取る</button>
-          <p id="status" class="status">Nintendo Switch Onlineアプリの「いつものバイト」をトリミングせずに送ってください。1番上の自分の行だけ読み取ります。</p>
+          <p id="status" class="status">画像を選んだら、薄いガイドに合わせて切り取ってください。1番上の自分の行だけ読み取ります。</p>
+          <div id="cropEditor" class="cropEditor" hidden>
+            <div class="cropFrame">
+              <canvas id="cropCanvas"></canvas>
+              <div class="cropGuide" aria-hidden="true">
+                <div class="guideBox guideSummary">ポイント欄</div>
+                <div class="guideBox guideWaves">WAVE欄</div>
+                <div class="guideBox guidePlayer">自分の行</div>
+              </div>
+            </div>
+            <div class="cropControls">
+              <label>
+                <span>拡大</span>
+                <input id="cropZoom" type="range" min="100" max="180" value="100" />
+              </label>
+              <label>
+                <span>左右</span>
+                <input id="cropX" type="range" min="-100" max="100" value="0" />
+              </label>
+              <label>
+                <span>上下</span>
+                <input id="cropY" type="range" min="-100" max="100" value="0" />
+              </label>
+            </div>
+            <button id="applyCropButton" type="button">この形に切り取る</button>
+          </div>
           <img id="preview" alt="選択したスクリーンショットのプレビュー" />
         </section>
 
@@ -230,6 +255,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="main.js?v=20260710-17"></script>
+  <script src="main.js?v=20260710-18"></script>
 </body>
 </html>

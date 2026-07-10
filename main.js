@@ -14,20 +14,49 @@ const WAVE_TYPES = {
   dayOnly: "昼のみ",
   nightAny: "夜あり",
 };
-const OCR_BASE_WIDTH = 720;
-const OCR_BASE_HEIGHT = 1280;
-const TOP_ROW_FALLBACK_Y = 690;
-const TOP_ROW_RECTS = {
-  boss: { x: 138, y: 48, width: 90, height: 36 },
-  deliveryPair: { x: 482, y: 6, width: 132, height: 46 },
-  delivery: { x: 499, y: 8, width: 60, height: 42 },
-  assistDelivery: { x: 550, y: 8, width: 60, height: 42 },
-  red: { x: 482, y: 49, width: 118, height: 42 },
-  rescue: { x: 614, y: 9, width: 70, height: 36 },
-  death: { x: 614, y: 50, width: 70, height: 36 },
-};
-const SUMMARY_RECTS = {
-  teamDelivery: { x: 36, y: 207, width: 116, height: 43 },
+const CROP_WIDTH = 750;
+const CROP_HEIGHT = 1012;
+const OCR_PROFILES = {
+  full: {
+    width: 720,
+    height: 1280,
+    rowStartY: 610,
+    rowEndY: 835,
+    rowFallbackY: 690,
+    minRedPixels: 430,
+    summaryRects: {
+      teamDelivery: { x: 36, y: 207, width: 116, height: 43 },
+    },
+    topRowRects: {
+      boss: { x: 138, y: 48, width: 90, height: 36 },
+      deliveryPair: { x: 482, y: 6, width: 132, height: 46 },
+      delivery: { x: 499, y: 8, width: 60, height: 42 },
+      assistDelivery: { x: 550, y: 8, width: 60, height: 42 },
+      red: { x: 482, y: 49, width: 118, height: 42 },
+      rescue: { x: 614, y: 9, width: 70, height: 36 },
+      death: { x: 614, y: 50, width: 70, height: 36 },
+    },
+  },
+  cropped: {
+    width: CROP_WIDTH,
+    height: CROP_HEIGHT,
+    rowStartY: 520,
+    rowEndY: 765,
+    rowFallbackY: 565,
+    minRedPixels: 450,
+    summaryRects: {
+      teamDelivery: { x: 38, y: 77, width: 121, height: 45 },
+    },
+    topRowRects: {
+      boss: { x: 144, y: 48, width: 94, height: 36 },
+      deliveryPair: { x: 502, y: 6, width: 138, height: 46 },
+      delivery: { x: 520, y: 8, width: 63, height: 42 },
+      assistDelivery: { x: 573, y: 8, width: 63, height: 42 },
+      red: { x: 502, y: 49, width: 123, height: 42 },
+      rescue: { x: 640, y: 9, width: 73, height: 36 },
+      death: { x: 640, y: 50, width: 73, height: 36 },
+    },
+  },
 };
 
 const $ = (id) => document.getElementById(id);
@@ -50,8 +79,16 @@ const saveButton = $("saveButton");
 const preview = $("preview");
 const statusText = $("status");
 const recordCount = $("recordCount");
+const cropEditor = $("cropEditor");
+const cropCanvas = $("cropCanvas");
+const cropZoom = $("cropZoom");
+const cropX = $("cropX");
+const cropY = $("cropY");
+const applyCropButton = $("applyCropButton");
 
 let selectedImageData = "";
+let croppedImageBlob = null;
+let cropSourceImage = null;
 let activeAccount = null;
 let authToken = localStorage.getItem(SESSION_KEY) || "";
 let accountCache = [];
@@ -255,7 +292,10 @@ function setValue(id, n) {
 
 function resetRecordForm() {
   selectedImageData = "";
+  croppedImageBlob = null;
+  cropSourceImage = null;
   imageInput.value = "";
+  cropEditor.hidden = true;
   preview.removeAttribute("src");
   preview.style.display = "none";
   const noBossBattle = document.querySelector('input[name="bossBattle"][value="none"]');
@@ -298,26 +338,87 @@ function loadImageFromFile(file) {
   });
 }
 
-function drawBaseImage(image) {
+function drawCropPreview() {
+  if (!cropSourceImage) return;
+
+  cropCanvas.width = CROP_WIDTH;
+  cropCanvas.height = CROP_HEIGHT;
+  const context = cropCanvas.getContext("2d");
+  const zoom = Number(cropZoom.value || 100) / 100;
+  const baseScale = Math.max(
+    CROP_WIDTH / cropSourceImage.width,
+    CROP_HEIGHT / cropSourceImage.height
+  );
+  const scale = baseScale * zoom;
+  const drawWidth = cropSourceImage.width * scale;
+  const drawHeight = cropSourceImage.height * scale;
+  const maxShiftX = Math.max(0, (drawWidth - CROP_WIDTH) / 2);
+  const maxShiftY = Math.max(0, (drawHeight - CROP_HEIGHT) / 2);
+  const shiftX = (Number(cropX.value || 0) / 100) * maxShiftX;
+  const shiftY = (Number(cropY.value || 0) / 100) * maxShiftY;
+  const drawX = (CROP_WIDTH - drawWidth) / 2 + shiftX;
+  const drawY = (CROP_HEIGHT - drawHeight) / 2 + shiftY;
+
+  context.fillStyle = "#050706";
+  context.fillRect(0, 0, CROP_WIDTH, CROP_HEIGHT);
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(cropSourceImage, drawX, drawY, drawWidth, drawHeight);
+}
+
+function canvasToBlob(canvas, type = "image/jpeg", quality = 0.86) {
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), type, quality);
+  });
+}
+
+async function applyCurrentCrop() {
+  if (!cropSourceImage) return null;
+  drawCropPreview();
+  const blob = await canvasToBlob(cropCanvas);
+  if (!blob) return null;
+
+  croppedImageBlob = blob;
+  selectedImageData = cropCanvas.toDataURL("image/jpeg", 0.76);
+  preview.src = selectedImageData;
+  preview.style.display = "block";
+  statusText.textContent = "切り取りました。読み取り前に位置を確認してください。";
+  return blob;
+}
+
+async function getOcrImageSource() {
+  if (cropSourceImage) {
+    const blob = await applyCurrentCrop();
+    if (blob) return blob;
+  }
+  return croppedImageBlob || imageInput.files[0];
+}
+
+function selectOcrProfile(image) {
+  const ratio = image.width / image.height;
+  return ratio > 0.64 ? OCR_PROFILES.cropped : OCR_PROFILES.full;
+}
+
+function drawBaseImage(image, profile) {
   const canvas = document.createElement("canvas");
-  canvas.width = OCR_BASE_WIDTH;
-  canvas.height = OCR_BASE_HEIGHT;
+  canvas.width = profile.width;
+  canvas.height = profile.height;
   const context = canvas.getContext("2d", { willReadFrequently: true });
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
   return { canvas, context };
 }
 
-function detectTopPlayerRow(context) {
-  const startY = 610;
-  const endY = 835;
-  const minRedPixels = 430;
-  let bestY = TOP_ROW_FALLBACK_Y;
+function detectTopPlayerRow(context, profile) {
+  const startY = profile.rowStartY;
+  const endY = profile.rowEndY;
+  const minRedPixels = profile.minRedPixels;
+  let bestY = profile.rowFallbackY;
   let streak = 0;
 
   for (let y = startY; y < endY; y += 1) {
-    const { data } = context.getImageData(0, y, OCR_BASE_WIDTH, 1);
+    const { data } = context.getImageData(0, y, profile.width, 1);
     let redPixels = 0;
-    for (let x = 0; x < OCR_BASE_WIDTH; x += 1) {
+    for (let x = 0; x < profile.width; x += 1) {
       const index = x * 4;
       const r = data[index];
       const g = data[index + 1];
@@ -448,24 +549,25 @@ function fillFromTopRowOcr(reads) {
 
 async function readTopResultFromImage(file) {
   const image = await loadImageFromFile(file);
-  const { canvas: baseCanvas, context } = drawBaseImage(image);
-  const rowTop = detectTopPlayerRow(context);
+  const profile = selectOcrProfile(image);
+  const { canvas: baseCanvas, context } = drawBaseImage(image, profile);
+  const rowTop = detectTopPlayerRow(context, profile);
   const reads = [];
 
-  for (const [label, rect] of Object.entries(SUMMARY_RECTS)) {
+  for (const [label, rect] of Object.entries(profile.summaryRects)) {
     statusText.textContent = `合計欄を読み取り中... ${label}`;
     const crop = cropTopRowRegion(baseCanvas, 0, rect);
     reads.push(await recognizeDigits(crop, label));
   }
 
-  for (const [label, rect] of Object.entries(TOP_ROW_RECTS)) {
+  for (const [label, rect] of Object.entries(profile.topRowRects)) {
     statusText.textContent = `1番上の行を読み取り中... ${label}`;
     const crop = cropTopRowRegion(baseCanvas, rowTop, rect);
     reads.push(await recognizeDigits(crop, label));
   }
 
   const fields = fillFromTopRowOcr(reads);
-  return { rowTop, reads, fields };
+  return { rowTop, reads, fields, profile };
 }
 
 function autoFillFromText(text) {
@@ -570,15 +672,37 @@ imageInput.addEventListener("change", async () => {
   const file = imageInput.files[0];
   if (!file) return;
 
+  croppedImageBlob = null;
+  cropSourceImage = await loadImageFromFile(file);
+  cropZoom.value = "100";
+  cropX.value = "0";
+  cropY.value = "0";
+  cropEditor.hidden = false;
+  drawCropPreview();
   preview.src = URL.createObjectURL(file);
   preview.style.display = "block";
-  statusText.textContent = "画像を選択しました";
-  selectedImageData = await fileToCompressedDataUrl(file);
+  statusText.textContent = "薄いガイドに合わせて切り取り位置を調整してください。";
+  selectedImageData = "";
+});
+
+[cropZoom, cropX, cropY].forEach((control) => {
+  control.addEventListener("input", () => {
+    croppedImageBlob = null;
+    drawCropPreview();
+  });
+});
+
+applyCropButton.addEventListener("click", async () => {
+  applyCropButton.disabled = true;
+  try {
+    await applyCurrentCrop();
+  } finally {
+    applyCropButton.disabled = false;
+  }
 });
 
 ocrButton.addEventListener("click", async () => {
-  const file = imageInput.files[0];
-  if (!file) {
+  if (!imageInput.files[0]) {
     alert("スクショを選択してください。");
     return;
   }
@@ -587,7 +711,8 @@ ocrButton.addEventListener("click", async () => {
   statusText.textContent = "読み取り中...";
 
   try {
-    const topResult = await readTopResultFromImage(file);
+    const ocrSource = await getOcrImageSource();
+    const topResult = await readTopResultFromImage(ocrSource);
     const readCount = Object.values(topResult.fields).filter(Number.isFinite).length;
     const hasCoreNumbers = ["teamDelivery", "delivery", "red", "boss"].every((key) => (
       Number.isFinite(topResult.fields[key])
@@ -598,7 +723,7 @@ ocrButton.addEventListener("click", async () => {
     }
 
     statusText.textContent = "固定位置で読めなかったため、全文OCRに切り替えます...";
-    const result = await Tesseract.recognize(file, "eng+jpn", {
+    const result = await Tesseract.recognize(ocrSource, "eng+jpn", {
       logger: (message) => {
         if (message.status) {
           const pct = message.progress ? ` ${Math.round(message.progress * 100)}%` : "";
@@ -623,6 +748,9 @@ saveButton.addEventListener("click", async () => {
   saveButton.disabled = true;
 
   try {
+    if (!selectedImageData && imageInput.files[0] && cropSourceImage) {
+      await applyCurrentCrop();
+    }
     if (!selectedImageData && imageInput.files[0]) {
       selectedImageData = await fileToCompressedDataUrl(imageInput.files[0]);
     }

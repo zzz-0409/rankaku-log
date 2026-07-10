@@ -242,11 +242,13 @@ async function requireAccount(req) {
 }
 
 function normalizeRecord(record) {
+  const delivery = Number(record.delivery ?? record.delivered ?? record.gold ?? 0);
   return {
     id: String(record.id || crypto.randomUUID()),
     date: String(record.date || new Date().toISOString()),
     waveType: record.waveType === "nightAny" ? "nightAny" : "dayOnly",
     stage: String(record.stage || ""),
+    delivery,
     gold: Number(record.gold || 0),
     red: Number(record.red || 0),
     boss: Number(record.boss || 0),

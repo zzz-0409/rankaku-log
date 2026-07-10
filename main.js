@@ -205,8 +205,10 @@ function resetLocalData() {
 }
 
 function normalizeRecord(record) {
+  const delivery = Number(record.delivery ?? record.delivered ?? record.gold ?? 0);
   return {
     ...record,
+    delivery,
     waveType: record.waveType || "dayOnly",
     imageData: record.imageData || "",
   };
@@ -260,6 +262,7 @@ function autoFillFromText(text) {
   const likelyRed = nums.find((n) => n >= 300 && n <= 5000);
   const likelyBoss = nums.find((n) => n >= 0 && n <= 80);
 
+  setValue("delivery", likelyGold ?? 0);
   setValue("gold", likelyGold ?? 0);
   setValue("red", likelyRed ?? 0);
   setValue("boss", likelyBoss ?? 0);
@@ -399,6 +402,7 @@ saveButton.addEventListener("click", async () => {
       date: new Date().toISOString(),
       waveType: currentWaveType(),
       stage: $("stage").value,
+      delivery: value("delivery"),
       gold: value("gold"),
       red: value("red"),
       boss: value("boss"),
@@ -439,10 +443,10 @@ function min(records, key) {
   return Math.min(...records.map((record) => Number(record[key] || 0)));
 }
 
-function bestByGold(records) {
+function bestByDelivery(records) {
   return records.reduce((best, record) => {
     if (!best) return record;
-    if (Number(record.gold || 0) > Number(best.gold || 0)) return record;
+    if (Number(record.delivery || 0) > Number(best.delivery || 0)) return record;
     return best;
   }, null);
 }
@@ -471,6 +475,7 @@ function renderSummary() {
         <span class="statLabel">${escapeHtml(stage)} / ${WAVE_TYPES[waveType]}</span>
         <span class="statValue">${stageRecords.length}戦</span>
       </div>
+      ${stat("平均 納品数", avg(stageRecords, "delivery").toFixed(2), `最高 ${max(stageRecords, "delivery")}`)}
       ${stat("平均 金イクラ", avg(stageRecords, "gold").toFixed(2), `最高 ${max(stageRecords, "gold")}`)}
       ${stat("平均 赤イクラ", avg(stageRecords, "red").toFixed(2), `最高 ${max(stageRecords, "red")}`)}
       ${stat("平均 オオモノ", avg(stageRecords, "boss").toFixed(2), `最高 ${max(stageRecords, "boss")}`)}
@@ -479,7 +484,7 @@ function renderSummary() {
       <div class="statBox wide">
         <span class="statLabel">合計</span>
         <span class="statSub">
-          金 ${sum(stageRecords, "gold")} / 赤 ${sum(stageRecords, "red")} /
+          合計納品数 ${sum(stageRecords, "delivery")} / 合計金イクラ ${sum(stageRecords, "gold")} / 赤 ${sum(stageRecords, "red")} /
           オオモノ ${sum(stageRecords, "boss")} / 救助 ${sum(stageRecords, "rescue")} /
           デス ${sum(stageRecords, "death")}
         </span>
@@ -494,7 +499,7 @@ function totalCard(records, waveType) {
     <div class="totalCard">
       <span class="statLabel">${WAVE_TYPES[waveType]}</span>
       <span class="statValue">${sum(filtered, "gold")}</span>
-      <span class="statSub">合計納品数 / ${filtered.length}戦</span>
+      <span class="statSub">合計金イクラ / ${filtered.length}戦</span>
     </div>
   `;
 }
@@ -522,7 +527,7 @@ function renderBestCard(stage, best) {
         <h3>${escapeHtml(stage)}</h3>
         <div class="bestScore">
           <span>最高納品数</span>
-          <b>${Number(best.gold || 0)}</b>
+          <b>${Number(best.delivery || 0)}</b>
         </div>
       </div>
     </article>
@@ -544,7 +549,7 @@ function renderBestSummary() {
       const stageRecords = records.filter((record) => (
         record.waveType === waveType && record.stage === stage
       ));
-      return renderBestCard(stage, bestByGold(stageRecords));
+      return renderBestCard(stage, bestByDelivery(stageRecords));
     }).join("");
   });
 }
@@ -577,7 +582,7 @@ document.querySelectorAll('input[name="waveType"]').forEach((radio) => {
 
 exportButton.addEventListener("click", () => {
   const records = loadRecords();
-  const header = ["account", "date", "waveType", "stage", "gold", "red", "boss", "rescue", "death", "hasImage"];
+  const header = ["account", "date", "waveType", "stage", "delivery", "gold", "red", "boss", "rescue", "death", "hasImage"];
   const rows = records.map((record) => header.map((key) => {
     if (key === "account") return JSON.stringify(activeAccount?.name ?? "");
     if (key === "hasImage") return JSON.stringify(Boolean(record.imageData));

@@ -1,9 +1,9 @@
-const CACHE_NAME = "rankaku-log-v20260710-6";
+const CACHE_NAME = "rankaku-log-v20260710-7";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=20260710-12",
-  "./main.js?v=20260710-15",
+  "./style.css?v=20260710-13",
+  "./main.js?v=20260710-16",
   "./manifest.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",

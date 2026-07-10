@@ -225,6 +225,7 @@ function normalizeRecord(record) {
     delivery,
     assistDelivery,
     teamDelivery,
+    bossBattle: Boolean(record.bossBattle),
     waveType: record.waveType || "dayOnly",
     imageData: record.imageData || "",
   };
@@ -257,6 +258,8 @@ function resetRecordForm() {
   imageInput.value = "";
   preview.removeAttribute("src");
   preview.style.display = "none";
+  const noBossBattle = document.querySelector('input[name="bossBattle"][value="none"]');
+  if (noBossBattle) noBossBattle.checked = true;
 
   ["delivery", "assistDelivery", "teamDelivery", "red", "boss", "rescue", "death"].forEach((id) => {
     const element = $(id);
@@ -266,6 +269,10 @@ function resetRecordForm() {
 
 function currentWaveType() {
   return document.querySelector('input[name="waveType"]:checked')?.value || "dayOnly";
+}
+
+function currentBossBattle() {
+  return document.querySelector('input[name="bossBattle"]:checked')?.value === "yes";
 }
 
 function escapeHtml(value) {
@@ -624,6 +631,7 @@ saveButton.addEventListener("click", async () => {
       id: createId(),
       date: new Date().toISOString(),
       waveType: currentWaveType(),
+      bossBattle: currentBossBattle(),
       stage: $("stage").value,
       delivery: value("delivery"),
       assistDelivery: value("assistDelivery"),
@@ -668,6 +676,10 @@ function max(records, key) {
 function min(records, key) {
   if (records.length === 0) return 0;
   return Math.min(...records.map((record) => Number(record[key] || 0)));
+}
+
+function normalWaveRecords(records) {
+  return records.filter((record) => !record.bossBattle);
 }
 
 function bestByTeamDelivery(records) {
@@ -726,26 +738,28 @@ function renderSummary() {
   const stageRecords = records.filter((record) => (
     record.stage === stage && record.waveType === waveType
   ));
+  const actionRecords = normalWaveRecords(stageRecords);
 
   $("summary").innerHTML = `
     <div class="stats">
       <div class="statBox wide">
         <span class="statLabel">${escapeHtml(stage)} / ${WAVE_TYPES[waveType]}</span>
         <span class="statValue">${stageRecords.length}戦</span>
+        <span class="statSub">行動系平均はおかしらなし ${actionRecords.length}戦</span>
       </div>
       ${stat("平均 合計納品数", avg(stageRecords, "teamDelivery").toFixed(2), `最高 ${max(stageRecords, "teamDelivery")}`)}
       ${stat("平均 個人納品数", avg(stageRecords, "delivery").toFixed(2), `最高 ${max(stageRecords, "delivery")}`)}
       ${stat("平均 アシスト納品数", avg(stageRecords, "assistDelivery").toFixed(2), `最高 ${max(stageRecords, "assistDelivery")}`)}
-      ${stat("平均 赤イクラ", avg(stageRecords, "red").toFixed(2), `最高 ${max(stageRecords, "red")}`)}
-      ${stat("平均 オオモノ", avg(stageRecords, "boss").toFixed(2), `最高 ${max(stageRecords, "boss")}`)}
-      ${stat("平均 救助", avg(stageRecords, "rescue").toFixed(2), `最高 ${max(stageRecords, "rescue")}`)}
-      ${stat("平均 デス", avg(stageRecords, "death").toFixed(2), `最少 ${min(stageRecords, "death")}`)}
+      ${stat("平均 赤イクラ", avg(actionRecords, "red").toFixed(2), `おかしらなし最高 ${max(actionRecords, "red")}`)}
+      ${stat("平均 オオモノ", avg(actionRecords, "boss").toFixed(2), `おかしらなし最高 ${max(actionRecords, "boss")}`)}
+      ${stat("平均 救助", avg(actionRecords, "rescue").toFixed(2), `おかしらなし最高 ${max(actionRecords, "rescue")}`)}
+      ${stat("平均 デス", avg(actionRecords, "death").toFixed(2), `おかしらなし最少 ${min(actionRecords, "death")}`)}
       <div class="statBox wide">
         <span class="statLabel">合計</span>
         <span class="statSub">
-          最高合計納品数 ${max(stageRecords, "teamDelivery")} / 個人納品数 ${sum(stageRecords, "delivery")} / アシスト納品数 ${sum(stageRecords, "assistDelivery")} / 赤イクラ ${sum(stageRecords, "red")} /
-          オオモノ ${sum(stageRecords, "boss")} / 救助 ${sum(stageRecords, "rescue")} /
-          デス ${sum(stageRecords, "death")}
+          最高合計納品数 ${max(stageRecords, "teamDelivery")} / 個人納品数 ${sum(stageRecords, "delivery")} / アシスト納品数 ${sum(stageRecords, "assistDelivery")} / 赤イクラ ${sum(actionRecords, "red")} /
+          オオモノ ${sum(actionRecords, "boss")} / 救助 ${sum(actionRecords, "rescue")} /
+          デス ${sum(actionRecords, "death")}
         </span>
       </div>
     </div>
@@ -753,20 +767,21 @@ function renderSummary() {
 }
 
 function renderRecentAverage(recentRecords) {
+  const actionRecords = normalWaveRecords(recentRecords);
   $("recentAverage").innerHTML = `
     <div class="stats">
       <div class="statBox wide">
         <span class="statLabel">対象</span>
         <span class="statValue">${recentRecords.length}戦</span>
-        <span class="statSub">保存日時が新しい順の直近30戦</span>
+        <span class="statSub">行動系平均はおかしらなし ${actionRecords.length}戦</span>
       </div>
       ${stat("平均 合計納品数", avg(recentRecords, "teamDelivery").toFixed(2), `最高 ${max(recentRecords, "teamDelivery")}`)}
       ${stat("平均 個人納品数", avg(recentRecords, "delivery").toFixed(2), `最高 ${max(recentRecords, "delivery")}`)}
       ${stat("平均 アシスト", avg(recentRecords, "assistDelivery").toFixed(2), `最高 ${max(recentRecords, "assistDelivery")}`)}
-      ${stat("平均 赤イクラ", avg(recentRecords, "red").toFixed(2), `最高 ${max(recentRecords, "red")}`)}
-      ${stat("平均 オオモノ", avg(recentRecords, "boss").toFixed(2), `最高 ${max(recentRecords, "boss")}`)}
-      ${stat("平均 救助", avg(recentRecords, "rescue").toFixed(2), `最高 ${max(recentRecords, "rescue")}`)}
-      ${stat("平均 デス", avg(recentRecords, "death").toFixed(2), `最少 ${min(recentRecords, "death")}`)}
+      ${stat("平均 赤イクラ", avg(actionRecords, "red").toFixed(2), `おかしらなし最高 ${max(actionRecords, "red")}`)}
+      ${stat("平均 オオモノ", avg(actionRecords, "boss").toFixed(2), `おかしらなし最高 ${max(actionRecords, "boss")}`)}
+      ${stat("平均 救助", avg(actionRecords, "rescue").toFixed(2), `おかしらなし最高 ${max(actionRecords, "rescue")}`)}
+      ${stat("平均 デス", avg(actionRecords, "death").toFixed(2), `おかしらなし最少 ${min(actionRecords, "death")}`)}
     </div>
   `;
 }
@@ -775,6 +790,7 @@ function renderRecentRecord(record) {
   const image = record.imageData
     ? `<img src="${record.imageData}" alt="最近の記録画像" />`
     : `<div class="recentNoImage">画像なし</div>`;
+  const bossBadge = record.bossBattle ? `<span class="bossBattleBadge">おかしらあり</span>` : "";
 
   return `
     <article class="recentCard">
@@ -783,7 +799,7 @@ function renderRecentRecord(record) {
         <div class="recentTop">
           <div>
             <h3>${escapeHtml(record.stage || "ステージ未設定")}</h3>
-            <p>${escapeHtml(formatRecordDate(record.date))} / ${WAVE_TYPES[record.waveType] || ""}</p>
+            <p>${escapeHtml(formatRecordDate(record.date))} / ${WAVE_TYPES[record.waveType] || ""} ${bossBadge}</p>
           </div>
           <button class="deleteRecordButton" type="button" data-record-id="${escapeHtml(record.id)}">削除</button>
         </div>

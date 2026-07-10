@@ -253,6 +253,7 @@ function normalizeRecord(record) {
     delivery,
     assistDelivery,
     teamDelivery,
+    bossBattle: Boolean(record.bossBattle),
     gold: Number(record.gold || 0),
     red: Number(record.red || 0),
     boss: Number(record.boss || 0),

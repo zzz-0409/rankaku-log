@@ -1305,6 +1305,36 @@ function bestShareText(waveType) {
   return lines.join("\n");
 }
 
+async function dataUrlToFile(dataUrl, filename) {
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  return new File([blob], filename, { type: blob.type || "image/jpeg" });
+}
+
+async function bestShareFiles(waveType) {
+  const entries = stageBestEntries(loadRecords(), waveType)
+    .filter((entry) => entry.best?.imageData);
+  return Promise.all(entries.map((entry, index) => (
+    dataUrlToFile(
+      entry.best.imageData,
+      `rankaku-log-${waveType}-${String(index + 1).padStart(2, "0")}.jpg`
+    )
+  )));
+}
+
+function downloadShareFiles(files) {
+  files.forEach((file, index) => {
+    const url = URL.createObjectURL(file);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = file.name;
+    setTimeout(() => {
+      link.click();
+      URL.revokeObjectURL(url);
+    }, index * 180);
+  });
+}
+
 function canvasToPngBlob(canvas) {
   return new Promise((resolve) => {
     canvas.toBlob((blob) => resolve(blob), "image/png");
@@ -1430,22 +1460,19 @@ async function shareBestSummary(waveType, kind) {
     return;
   }
 
-  const blob = await createBestShareImage(waveType);
-  if (!blob) throw new Error("共有画像を作れませんでした。");
-  const file = new File([blob], `rankaku-log-${waveType}.png`, { type: "image/png" });
-  if (navigator.share && navigator.canShare?.({ files: [file] })) {
-    await navigator.share({ title, text, files: [file] });
+  const files = await bestShareFiles(waveType);
+  if (files.length === 0) {
+    alert("共有できる最高記録画像がまだありません。");
+    return;
+  }
+  if (navigator.share && navigator.canShare?.({ files })) {
+    await navigator.share({ title, text, files });
     return;
   }
 
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `rankaku-log-${waveType}.png`;
-  link.click();
-  URL.revokeObjectURL(url);
+  downloadShareFiles(files);
   if (navigator.clipboard) await navigator.clipboard.writeText(text);
-  alert("共有画像を保存しました。対応SNSで画像を選んで投稿してください。");
+  alert("最高記録画像を保存しました。対応SNSで画像を選んで投稿してください。");
 }
 
 function renderBestSummary() {

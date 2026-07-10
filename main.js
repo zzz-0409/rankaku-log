@@ -150,27 +150,12 @@ function setLoginMessage(message) {
 }
 
 function renderAccountList() {
-  const accounts = loadAccounts();
-  if (accounts.length === 0) {
-    accountList.innerHTML = "";
-    return;
-  }
-
-  accountList.innerHTML = `
-    <span>保存済み</span>
-    <div class="accountChips">
-      ${accounts.map((account) => `
-        <button type="button" class="accountChip" data-account-name="${escapeHtml(account.name)}">
-          ${escapeHtml(account.name)}
-        </button>
-      `).join("")}
-    </div>
-  `;
+  accountList.innerHTML = "";
+  accountList.hidden = true;
 }
 
 async function refreshAccountList() {
-  const payload = await apiRequest("/api/accounts", { auth: false });
-  accountCache = payload.accounts || [];
+  accountCache = [];
   renderAccountList();
 }
 

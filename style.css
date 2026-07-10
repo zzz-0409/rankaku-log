@@ -594,11 +594,26 @@ h1 {
 }
 
 .totalCard {
-  min-height: 104px;
+  min-height: 164px;
   border: 1px solid rgba(183, 227, 75, .2);
   border-radius: 8px;
   padding: 12px;
   background: linear-gradient(180deg, rgba(183, 227, 75, .09), rgba(17, 23, 20, 1));
+}
+
+.shareActions {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.shareActions button {
+  min-height: 38px;
+  padding: 8px 9px;
+  border-color: rgba(183, 227, 75, .24);
+  background: rgba(183, 227, 75, .1);
+  color: var(--accent);
+  font-size: 12px;
 }
 
 .recentList {

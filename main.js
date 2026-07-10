@@ -1089,6 +1089,22 @@ function bestByTeamDelivery(records) {
   }, null);
 }
 
+function stageBestEntries(records, waveType) {
+  return STAGES.map((stage) => {
+    const stageRecords = records.filter((record) => (
+      record.waveType === waveType && record.stage === stage
+    ));
+    return {
+      stage,
+      best: bestByTeamDelivery(stageRecords),
+    };
+  });
+}
+
+function bestTotal(entries) {
+  return entries.reduce((total, entry) => total + Number(entry.best?.teamDelivery || 0), 0);
+}
+
 function latestRecords(records, limit = 30) {
   return [...records]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -1226,11 +1242,17 @@ function renderRecentRecords() {
 
 function totalCard(records, waveType) {
   const filtered = records.filter((record) => record.waveType === waveType);
+  const entries = stageBestEntries(records, waveType);
+  const completedStages = entries.filter((entry) => entry.best).length;
   return `
     <div class="totalCard">
       <span class="statLabel">${WAVE_TYPES[waveType]}</span>
-      <span class="statValue">${max(filtered, "teamDelivery")}</span>
-      <span class="statSub">最高合計納品数 / ${filtered.length}戦</span>
+      <span class="statValue">${bestTotal(entries)}</span>
+      <span class="statSub">各ステージ最高合計納品数 / ${completedStages}ステージ / ${filtered.length}戦</span>
+      <div class="shareActions">
+        <button type="button" data-share-wave="${waveType}" data-share-kind="text">数字だけ共有</button>
+        <button type="button" data-share-wave="${waveType}" data-share-kind="image">画像付き共有</button>
+      </div>
     </div>
   `;
 }
@@ -1263,6 +1285,167 @@ function renderBestCard(stage, best) {
       </div>
     </article>
   `;
+}
+
+function bestShareTitle(waveType) {
+  return `乱獲ログ 最高記録（${WAVE_TYPES[waveType]}）`;
+}
+
+function bestShareText(waveType) {
+  const entries = stageBestEntries(loadRecords(), waveType);
+  const total = bestTotal(entries);
+  const lines = [
+    bestShareTitle(waveType),
+    `各ステージ最高合計納品数: ${total}`,
+    "",
+    ...entries.map((entry) => `${entry.stage}: ${Number(entry.best?.teamDelivery || 0)}`),
+    "",
+    "https://rankaku-log.onrender.com",
+  ];
+  return lines.join("\n");
+}
+
+function canvasToPngBlob(canvas) {
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), "image/png");
+  });
+}
+
+function loadShareImage(src) {
+  return new Promise((resolve) => {
+    if (!src) {
+      resolve(null);
+      return;
+    }
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => resolve(null);
+    image.src = src;
+  });
+}
+
+function drawCoverImage(context, image, x, y, width, height) {
+  const imageRatio = image.width / image.height;
+  const targetRatio = width / height;
+  let sourceWidth = image.width;
+  let sourceHeight = image.height;
+  let sourceX = 0;
+  let sourceY = 0;
+
+  if (imageRatio > targetRatio) {
+    sourceWidth = image.height * targetRatio;
+    sourceX = (image.width - sourceWidth) / 2;
+  } else {
+    sourceHeight = image.width / targetRatio;
+    sourceY = (image.height - sourceHeight) / 2;
+  }
+
+  context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, x, y, width, height);
+}
+
+function drawFittedText(context, text, x, y, maxWidth) {
+  let output = String(text);
+  while (output.length > 1 && context.measureText(output).width > maxWidth) {
+    output = `${output.slice(0, -2)}…`;
+  }
+  context.fillText(output, x, y);
+}
+
+async function createBestShareImage(waveType) {
+  const entries = stageBestEntries(loadRecords(), waveType);
+  const width = 1080;
+  const rowHeight = 142;
+  const height = 270 + entries.length * rowHeight + 70;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+
+  context.fillStyle = "#101312";
+  context.fillRect(0, 0, width, height);
+  context.fillStyle = "#b7e34b";
+  context.fillRect(0, 0, width, 14);
+
+  context.fillStyle = "#f4f7f2";
+  context.font = "900 54px system-ui, sans-serif";
+  context.fillText("乱獲ログ 最高記録", 56, 92);
+  context.fillStyle = "#b7c2b7";
+  context.font = "800 30px system-ui, sans-serif";
+  context.fillText(WAVE_TYPES[waveType], 58, 138);
+
+  context.fillStyle = "#b7e34b";
+  context.font = "900 92px system-ui, sans-serif";
+  context.fillText(String(bestTotal(entries)), 56, 235);
+  context.fillStyle = "#b7c2b7";
+  context.font = "800 26px system-ui, sans-serif";
+  context.fillText("各ステージ最高合計納品数", 310, 218);
+
+  for (let i = 0; i < entries.length; i += 1) {
+    const entry = entries[i];
+    const y = 282 + i * rowHeight;
+    context.fillStyle = i % 2 === 0 ? "#1a201d" : "#141a17";
+    context.fillRect(44, y, width - 88, rowHeight - 14);
+
+    const image = await loadShareImage(entry.best?.imageData || "");
+    if (image) {
+      drawCoverImage(context, image, 66, y + 18, 136, 92);
+    } else {
+      context.fillStyle = "#050706";
+      context.fillRect(66, y + 18, 136, 92);
+      context.fillStyle = "#6f7a70";
+      context.font = "800 22px system-ui, sans-serif";
+      context.fillText("画像なし", 88, y + 72);
+    }
+
+    context.fillStyle = "#f4f7f2";
+    context.font = "850 31px system-ui, sans-serif";
+    drawFittedText(context, entry.stage, 228, y + 55, 610);
+    context.fillStyle = "#b7c2b7";
+    context.font = "750 22px system-ui, sans-serif";
+    context.fillText(entry.best ? formatRecordDate(entry.best.date) : "記録なし", 228, y + 92);
+    context.fillStyle = "#b7e34b";
+    context.font = "900 54px system-ui, sans-serif";
+    context.textAlign = "right";
+    context.fillText(String(Number(entry.best?.teamDelivery || 0)), width - 76, y + 76);
+    context.textAlign = "left";
+  }
+
+  context.fillStyle = "#b7c2b7";
+  context.font = "750 24px system-ui, sans-serif";
+  context.fillText("rankaku-log.onrender.com", 56, height - 34);
+  return canvasToPngBlob(canvas);
+}
+
+async function shareBestSummary(waveType, kind) {
+  const title = bestShareTitle(waveType);
+  const text = bestShareText(waveType);
+
+  if (kind === "text") {
+    if (navigator.share) {
+      await navigator.share({ title, text });
+      return;
+    }
+    await navigator.clipboard.writeText(text);
+    alert("共有用テキストをコピーしました。");
+    return;
+  }
+
+  const blob = await createBestShareImage(waveType);
+  if (!blob) throw new Error("共有画像を作れませんでした。");
+  const file = new File([blob], `rankaku-log-${waveType}.png`, { type: "image/png" });
+  if (navigator.share && navigator.canShare?.({ files: [file] })) {
+    await navigator.share({ title, text, files: [file] });
+    return;
+  }
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `rankaku-log-${waveType}.png`;
+  link.click();
+  URL.revokeObjectURL(url);
+  if (navigator.clipboard) await navigator.clipboard.writeText(text);
+  alert("共有画像を保存しました。対応SNSで画像を選んで投稿してください。");
 }
 
 function renderBestSummary() {
@@ -1322,6 +1505,21 @@ document.querySelectorAll(".collapsiblePanel > .sectionTitle").forEach((title) =
     event.preventDefault();
     togglePanel();
   });
+});
+
+$("totalSummary").addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-share-wave][data-share-kind]");
+  if (!button) return;
+
+  button.disabled = true;
+  try {
+    await shareBestSummary(button.dataset.shareWave, button.dataset.shareKind);
+  } catch (error) {
+    console.error(error);
+    alert("共有に失敗しました。もう一度試してください。");
+  } finally {
+    button.disabled = false;
+  }
 });
 
 $("recentRecords").addEventListener("click", async (event) => {

@@ -78,6 +78,7 @@ const logoutButton = $("logoutButton");
 const imageInput = $("imageInput");
 const ocrButton = $("ocrButton");
 const saveButton = $("saveButton");
+const exportTrainingButton = $("exportTrainingButton");
 const preview = $("preview");
 const statusText = $("status");
 const recordCount = $("recordCount");
@@ -1238,6 +1239,95 @@ function latestRecords(records, limit = 30) {
     .slice(0, limit);
 }
 
+function trainingTarget(record) {
+  return {
+    stage: record.stage || "",
+    waveType: record.waveType || "",
+    bossBattle: Boolean(record.bossBattle),
+    teamDelivery: Number(record.teamDelivery || 0),
+    delivery: Number(record.delivery || 0),
+    assistDelivery: Number(record.assistDelivery || 0),
+    red: Number(record.red || 0),
+    boss: Number(record.boss || 0),
+    rescue: Number(record.rescue || 0),
+    death: Number(record.death || 0),
+  };
+}
+
+function trainingRecords() {
+  return loadRecords().filter((record) => record.imageData && record.ocrTraining);
+}
+
+function openAiVisionFineTuneLine(record) {
+  return {
+    messages: [
+      {
+        role: "system",
+        content: "You read Splatoon Salmon Run result screenshots. Return only compact JSON with stage, waveType, bossBattle, teamDelivery, delivery, assistDelivery, red, boss, rescue, and death.",
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: "Read the top player row and total delivery from this result image. Use the corrected saved values as the target format.",
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: record.imageData,
+            },
+          },
+        ],
+      },
+      {
+        role: "assistant",
+        content: JSON.stringify(trainingTarget(record)),
+      },
+    ],
+  };
+}
+
+function downloadTextFile(filename, text, type = "application/json") {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportTrainingData() {
+  const records = trainingRecords();
+  if (records.length === 0) {
+    alert("学習データに使える記録がまだありません。画像読み取り後に保存した記録を増やしてください。");
+    return;
+  }
+
+  const exportedAt = new Date().toISOString();
+  const generic = {
+    exportedAt,
+    format: "rankaku-log-ocr-training-v1",
+    count: records.length,
+    records: records.map((record) => ({
+      id: record.id,
+      date: record.date,
+      imageSource: record.imageSource || "",
+      imageData: record.imageData,
+      target: trainingTarget(record),
+      ocrTraining: record.ocrTraining,
+    })),
+  };
+  const jsonl = records.map(openAiVisionFineTuneLine).map((line) => JSON.stringify(line)).join("\n");
+  const stamp = exportedAt.replace(/[:.]/g, "-");
+
+  downloadTextFile(`rankaku-log-training-${stamp}.json`, JSON.stringify(generic, null, 2));
+  setTimeout(() => {
+    downloadTextFile(`rankaku-log-openai-vision-${stamp}.jsonl`, `${jsonl}\n`, "application/jsonl");
+  }, 250);
+}
+
 function formatRecordDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
@@ -1707,6 +1797,8 @@ imageModal.addEventListener("click", (event) => {
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !imageModal.hidden) closeExpandedImage();
 });
+
+exportTrainingButton.addEventListener("click", exportTrainingData);
 
 $("recentRecords").addEventListener("click", async (event) => {
   const button = event.target.closest(".deleteRecordButton");

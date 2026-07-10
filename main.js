@@ -45,11 +45,8 @@ const logoutButton = $("logoutButton");
 const imageInput = $("imageInput");
 const ocrButton = $("ocrButton");
 const saveButton = $("saveButton");
-const exportButton = $("exportButton");
-const clearButton = $("clearButton");
 const preview = $("preview");
 const statusText = $("status");
-const rawText = $("rawText");
 const recordCount = $("recordCount");
 
 let selectedImageData = "";
@@ -528,7 +525,6 @@ ocrButton.addEventListener("click", async () => {
 
   ocrButton.disabled = true;
   statusText.textContent = "読み取り中...";
-  rawText.textContent = "";
 
   try {
     const topResult = await readTopResultFromImage(file);
@@ -536,11 +532,6 @@ ocrButton.addEventListener("click", async () => {
     const hasCoreNumbers = ["teamDelivery", "delivery", "red", "boss"].every((key) => (
       Number.isFinite(topResult.fields[key])
     ));
-    rawText.textContent = [
-      `top row y=${topResult.rowTop}`,
-      ...topResult.reads.map((read) => `${read.label}: ${read.text}`),
-    ].join("\n");
-
     if (hasCoreNumbers && readCount >= 4) {
       statusText.textContent = "1番上の行を読み取りました。数字を確認してください。";
       return;
@@ -557,7 +548,6 @@ ocrButton.addEventListener("click", async () => {
     });
 
     const text = result.data.text;
-    rawText.textContent = `${rawText.textContent}\n\nfallback:\n${text}`;
     autoFillFromText(text);
     statusText.textContent = "読み取り完了。数字を確認してください。";
   } catch (error) {
@@ -759,38 +749,6 @@ document.querySelectorAll(".viewTab").forEach((tab) => {
 $("stage").addEventListener("change", renderAll);
 document.querySelectorAll('input[name="waveType"]').forEach((radio) => {
   radio.addEventListener("change", renderAll);
-});
-
-exportButton.addEventListener("click", () => {
-  const records = loadRecords();
-  const header = ["account", "date", "waveType", "stage", "teamDelivery", "delivery", "red", "boss", "rescue", "death", "hasImage"];
-  const rows = records.map((record) => header.map((key) => {
-    if (key === "account") return JSON.stringify(activeAccount?.name ?? "");
-    if (key === "hasImage") return JSON.stringify(Boolean(record.imageData));
-    return JSON.stringify(record[key] ?? "");
-  }).join(","));
-  const csv = [header.join(","), ...rows].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const anchor = document.createElement("a");
-  anchor.href = URL.createObjectURL(blob);
-  anchor.download = `rankaku-log-${activeAccount?.name || "account"}.csv`;
-  anchor.click();
-});
-
-clearButton.addEventListener("click", async () => {
-  if (!confirm("このアカウントの記録をすべて削除しますか？")) return;
-  clearButton.disabled = true;
-  try {
-    recordCache = [];
-    await apiRequest("/api/records", { method: "DELETE" });
-    renderAll();
-    statusText.textContent = "記録を削除しました";
-  } catch (error) {
-    console.error(error);
-    statusText.textContent = error.message || "記録の削除に失敗しました";
-  } finally {
-    clearButton.disabled = false;
-  }
 });
 
 async function boot() {

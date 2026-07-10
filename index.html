@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>乱獲ログ</title>
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="style.css?v=20260710-7" />
+  <link rel="stylesheet" href="style.css?v=20260710-8" />
 </head>
 <body>
   <section id="loginScreen" class="loginScreen">
@@ -98,14 +98,19 @@
           </label>
 
           <div class="numberGrid">
-            <label class="field">
-              <span>個人納品数</span>
-              <input id="delivery" type="number" inputmode="numeric" min="0" placeholder="0" />
-            </label>
-            <label class="field">
-              <span>アシスト納品数</span>
-              <input id="assistDelivery" type="number" inputmode="numeric" min="0" placeholder="0" />
-            </label>
+            <div class="field deliveryPair">
+              <span>個人納品数/アシスト</span>
+              <div class="splitInputs">
+                <label>
+                  <small>個人</small>
+                  <input id="delivery" type="number" inputmode="numeric" min="0" placeholder="0" />
+                </label>
+                <label>
+                  <small>アシスト</small>
+                  <input id="assistDelivery" type="number" inputmode="numeric" min="0" placeholder="0" />
+                </label>
+              </div>
+            </div>
             <label class="field">
               <span>合計納品数</span>
               <input id="teamDelivery" type="number" inputmode="numeric" min="0" placeholder="0" />
@@ -168,6 +173,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="main.js?v=20260710-7"></script>
+  <script src="main.js?v=20260710-8"></script>
 </body>
 </html>

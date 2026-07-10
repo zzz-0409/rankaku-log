@@ -382,6 +382,27 @@ h1 {
   gap: 10px;
 }
 
+.deliveryPair {
+  grid-column: 1 / -1;
+}
+
+.splitInputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.splitInputs label {
+  display: grid;
+  gap: 5px;
+}
+
+.splitInputs small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
 .numberGrid .field:last-child {
   grid-column: 1 / -1;
 }

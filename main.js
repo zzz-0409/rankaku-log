@@ -19,7 +19,8 @@ const OCR_BASE_HEIGHT = 1280;
 const TOP_ROW_FALLBACK_Y = 690;
 const TOP_ROW_RECTS = {
   boss: { x: 138, y: 48, width: 90, height: 36 },
-  goldDelivery: { x: 482, y: 8, width: 122, height: 42 },
+  delivery: { x: 499, y: 8, width: 60, height: 42 },
+  assistDelivery: { x: 550, y: 8, width: 60, height: 42 },
   red: { x: 482, y: 49, width: 118, height: 42 },
   rescue: { x: 614, y: 9, width: 70, height: 36 },
   death: { x: 614, y: 50, width: 70, height: 36 },
@@ -375,30 +376,12 @@ function firstNumber(text) {
   return extractNumbers(text)[0];
 }
 
-function deliveryNumbers(text) {
-  const clean = String(text || "");
-  const exact = clean.match(/[xX]\s*(\d+)\s*[<({\[]\s*(\d+)/);
-  if (exact) {
-    return {
-      delivery: Number(exact[1]),
-      assistDelivery: Number(exact[2]),
-    };
-  }
-
-  const numbers = extractNumbers(clean);
-  return {
-    delivery: numbers[0],
-    assistDelivery: numbers[1],
-  };
-}
-
 function fillFromTopRowOcr(reads) {
   const byLabel = Object.fromEntries(reads.map((read) => [read.label, read.text]));
-  const playerDelivery = deliveryNumbers(byLabel.goldDelivery || "");
   const fields = {
     teamDelivery: firstNumber(byLabel.teamDelivery || ""),
-    delivery: playerDelivery.delivery,
-    assistDelivery: playerDelivery.assistDelivery,
+    delivery: firstNumber(byLabel.delivery || ""),
+    assistDelivery: firstNumber(byLabel.assistDelivery || ""),
     red: firstNumber(byLabel.red || ""),
     boss: firstNumber(byLabel.boss || ""),
     rescue: firstNumber(byLabel.rescue || ""),

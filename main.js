@@ -20,6 +20,7 @@ const OCR_PROFILES = {
   full: {
     width: 720,
     height: 1280,
+    rowLeft: 18,
     rowStartY: 610,
     rowEndY: 835,
     rowFallbackY: 690,
@@ -40,6 +41,7 @@ const OCR_PROFILES = {
   cropped: {
     width: CROP_WIDTH,
     height: CROP_HEIGHT,
+    rowLeft: 20,
     rowStartY: 520,
     rowEndY: 765,
     rowFallbackY: 565,
@@ -387,10 +389,7 @@ async function applyCurrentCrop() {
 }
 
 async function getOcrImageSource() {
-  if (cropSourceImage) {
-    const blob = await applyCurrentCrop();
-    if (blob) return blob;
-  }
+  if (cropSourceImage) return croppedImageBlob;
   return croppedImageBlob || imageInput.files[0];
 }
 
@@ -438,13 +437,63 @@ function detectTopPlayerRow(context, profile) {
     }
   }
 
-  return bestY;
+  const bounds = detectTopPlayerPanelBounds(context, profile, bestY);
+  return {
+    top: bestY,
+    left: bounds.left,
+    right: bounds.right,
+    xOffset: bounds.left - profile.rowLeft,
+  };
 }
 
-function cropTopRowRegion(baseCanvas, rowTop, rect) {
+function isPlayerPanelRed(r, g, b) {
+  return r > 150 && g > 35 && g < 115 && b > 18 && b < 100 && r > g * 1.55 && r > b * 1.6;
+}
+
+function detectTopPlayerPanelBounds(context, profile, rowTop) {
+  const sampleHeight = 80;
+  const startY = Math.max(0, rowTop + 6);
+  const endY = Math.min(profile.height, startY + sampleHeight);
+  const counts = new Array(profile.width).fill(0);
+
+  for (let y = startY; y < endY; y += 1) {
+    const { data } = context.getImageData(0, y, profile.width, 1);
+    for (let x = 0; x < profile.width; x += 1) {
+      const index = x * 4;
+      if (isPlayerPanelRed(data[index], data[index + 1], data[index + 2])) {
+        counts[x] += 1;
+      }
+    }
+  }
+
+  const threshold = Math.max(5, Math.floor((endY - startY) * 0.18));
+  let left = -1;
+  let right = -1;
+  for (let x = 0; x < profile.width; x += 1) {
+    if (counts[x] >= threshold) {
+      if (left < 0) left = x;
+      right = x;
+    }
+  }
+
+  if (left < 0 || right < 0 || right - left < profile.width * 0.45) {
+    return {
+      left: profile.rowLeft,
+      right: profile.width - profile.rowLeft,
+    };
+  }
+
+  return { left, right };
+}
+
+function cropTopRowRegion(baseCanvas, rowInfo, rect) {
+  const top = typeof rowInfo === "number" ? rowInfo : rowInfo.top;
+  const xOffset = typeof rowInfo === "number" ? 0 : rowInfo.xOffset;
+  const sourceX = Math.max(0, Math.min(baseCanvas.width - rect.width, rect.x + xOffset));
+  const sourceY = Math.max(0, Math.min(baseCanvas.height - rect.height, top + rect.y));
   const source = {
-    x: rect.x,
-    y: rowTop + rect.y,
+    x: sourceX,
+    y: sourceY,
     width: rect.width,
     height: rect.height,
   };
@@ -493,6 +542,216 @@ async function recognizeDigits(canvas, label) {
   };
 }
 
+let digitTemplates = null;
+
+function getDigitTemplates() {
+  if (digitTemplates) return digitTemplates;
+  const fonts = [
+    "900 34px Impact",
+    "900 34px Arial Black",
+    "900 34px sans-serif",
+    "800 36px sans-serif",
+  ];
+  digitTemplates = {};
+  for (let digit = 0; digit <= 9; digit += 1) {
+    digitTemplates[String(digit)] = fonts.map((font) => createDigitTemplate(String(digit), font));
+  }
+  return digitTemplates;
+}
+
+function createDigitTemplate(digit, font) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 42;
+  canvas.height = 58;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.fillStyle = "#fff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = "#000";
+  context.font = font;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(digit, canvas.width / 2, canvas.height / 2 + 1);
+  return normalizeGlyphBitmap(canvas, { left: 0, right: canvas.width - 1, top: 0, bottom: canvas.height - 1 });
+}
+
+function isInkPixel(data, index) {
+  return data[index] < 150 && data[index + 1] < 150 && data[index + 2] < 150;
+}
+
+function findInkBounds(canvas, runLeft = 0, runRight = canvas.width - 1) {
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+  let left = canvas.width;
+  let right = -1;
+  let top = canvas.height;
+  let bottom = -1;
+
+  for (let y = 0; y < canvas.height; y += 1) {
+    for (let x = runLeft; x <= runRight; x += 1) {
+      const index = (y * canvas.width + x) * 4;
+      if (isInkPixel(data, index)) {
+        left = Math.min(left, x);
+        right = Math.max(right, x);
+        top = Math.min(top, y);
+        bottom = Math.max(bottom, y);
+      }
+    }
+  }
+
+  if (right < left || bottom < top) return null;
+  return { left, right, top, bottom };
+}
+
+function normalizeGlyphBitmap(canvas, bounds) {
+  const size = 18;
+  const normalized = document.createElement("canvas");
+  normalized.width = size;
+  normalized.height = size + 10;
+  const context = normalized.getContext("2d", { willReadFrequently: true });
+  context.fillStyle = "#fff";
+  context.fillRect(0, 0, normalized.width, normalized.height);
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+
+  const sourceWidth = Math.max(1, bounds.right - bounds.left + 1);
+  const sourceHeight = Math.max(1, bounds.bottom - bounds.top + 1);
+  const scale = Math.min((normalized.width - 2) / sourceWidth, (normalized.height - 2) / sourceHeight);
+  const targetWidth = Math.max(1, Math.round(sourceWidth * scale));
+  const targetHeight = Math.max(1, Math.round(sourceHeight * scale));
+  const targetX = Math.round((normalized.width - targetWidth) / 2);
+  const targetY = Math.round((normalized.height - targetHeight) / 2);
+
+  context.drawImage(
+    canvas,
+    bounds.left,
+    bounds.top,
+    sourceWidth,
+    sourceHeight,
+    targetX,
+    targetY,
+    targetWidth,
+    targetHeight
+  );
+
+  const imageData = context.getImageData(0, 0, normalized.width, normalized.height);
+  const { data } = imageData;
+  for (let i = 0; i < data.length; i += 4) {
+    const ink = isInkPixel(data, i);
+    const value = ink ? 0 : 255;
+    data[i] = value;
+    data[i + 1] = value;
+    data[i + 2] = value;
+  }
+  context.putImageData(imageData, 0, 0);
+  return imageData.data;
+}
+
+function bitmapDistance(a, b) {
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 4) {
+    diff += Math.abs(a[i] - b[i]);
+  }
+  return diff / (a.length / 4) / 255;
+}
+
+function classifyDigit(canvas, bounds) {
+  const bitmap = normalizeGlyphBitmap(canvas, bounds);
+  const templates = getDigitTemplates();
+  let best = { digit: "", score: -Infinity };
+
+  for (const [digit, variants] of Object.entries(templates)) {
+    for (const template of variants) {
+      const score = 1 - bitmapDistance(bitmap, template);
+      if (score > best.score) best = { digit, score };
+    }
+  }
+
+  return best;
+}
+
+function extractGlyphRuns(canvas) {
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+  const columnInk = [];
+  for (let x = 0; x < canvas.width; x += 1) {
+    let ink = 0;
+    for (let y = 0; y < canvas.height; y += 1) {
+      const index = (y * canvas.width + x) * 4;
+      if (isInkPixel(data, index)) ink += 1;
+    }
+    columnInk[x] = ink;
+  }
+
+  const minColumnInk = Math.max(2, Math.floor(canvas.height * 0.05));
+  const runs = [];
+  let runStart = -1;
+  let empty = 0;
+  for (let x = 0; x < canvas.width; x += 1) {
+    if (columnInk[x] >= minColumnInk) {
+      if (runStart < 0) runStart = x;
+      empty = 0;
+    } else if (runStart >= 0) {
+      empty += 1;
+      if (empty >= 3) {
+        runs.push({ left: runStart, right: x - empty });
+        runStart = -1;
+        empty = 0;
+      }
+    }
+  }
+  if (runStart >= 0) runs.push({ left: runStart, right: canvas.width - 1 });
+  return runs;
+}
+
+function readGameFontNumber(canvas, options = {}) {
+  const runs = extractGlyphRuns(canvas);
+  const digits = [];
+  const minScore = options.minScore ?? 0.56;
+  const maxDigits = options.maxDigits ?? 4;
+
+  for (const run of runs) {
+    const bounds = findInkBounds(canvas, run.left, run.right);
+    if (!bounds) continue;
+    const width = bounds.right - bounds.left + 1;
+    const height = bounds.bottom - bounds.top + 1;
+    if (height < canvas.height * 0.22 || width < 4) continue;
+
+    const isLikelyBracket = width <= 7 && height > canvas.height * 0.38;
+    if (isLikelyBracket) continue;
+
+    const classified = classifyDigit(canvas, bounds);
+    if (classified.score >= minScore) {
+      digits.push({ ...classified, x: bounds.left });
+    }
+  }
+
+  const text = digits
+    .sort((a, b) => a.x - b.x)
+    .slice(0, maxDigits)
+    .map((item) => item.digit)
+    .join("");
+
+  if (!text) return "";
+  const number = Number(text);
+  if (Number.isFinite(options.min) && number < options.min) return "";
+  if (Number.isFinite(options.max) && number > options.max) return "";
+  return text;
+}
+
+function gameFontOptionsForLabel(label) {
+  const options = {
+    teamDelivery: { min: 0, max: 999, maxDigits: 3, minScore: 0.54 },
+    delivery: { min: 0, max: 200, maxDigits: 3, minScore: 0.54 },
+    assistDelivery: { min: 0, max: 99, maxDigits: 2, minScore: 0.52 },
+    deliveryPair: { min: 0, max: 9999, maxDigits: 5, minScore: 0.54 },
+    red: { min: 0, max: 9999, maxDigits: 4, minScore: 0.54 },
+    boss: { min: 0, max: 99, maxDigits: 2, minScore: 0.54 },
+    rescue: { min: 0, max: 9, maxDigits: 1, minScore: 0.52 },
+    death: { min: 0, max: 9, maxDigits: 1, minScore: 0.52 },
+  };
+  return options[label] || {};
+}
+
 function firstNumber(text) {
   return extractNumbers(text)[0];
 }
@@ -530,15 +789,17 @@ function parseDeliveryPair(text) {
 
 function fillFromTopRowOcr(reads) {
   const byLabel = Object.fromEntries(reads.map((read) => [read.label, read.text]));
+  const byGameFont = Object.fromEntries(reads.map((read) => [read.label, read.gameFontText || ""]));
   const playerDelivery = parseDeliveryPair(byLabel.deliveryPair || "");
+  const gameFontPair = byGameFont.deliveryPair || "";
   const fields = {
-    teamDelivery: firstNumber(byLabel.teamDelivery || ""),
-    delivery: playerDelivery.delivery ?? firstNumber(byLabel.delivery || ""),
-    assistDelivery: playerDelivery.assistDelivery ?? firstNumberInRange(byLabel.assistDelivery || "", 0, 99),
-    red: firstNumber(byLabel.red || ""),
-    boss: firstNumber(byLabel.boss || ""),
-    rescue: firstNumber(byLabel.rescue || ""),
-    death: firstNumber(byLabel.death || ""),
+    teamDelivery: firstNumber(byGameFont.teamDelivery || "") ?? firstNumber(byLabel.teamDelivery || ""),
+    delivery: firstNumberInRange(byGameFont.delivery || "", 0, 200) ?? playerDelivery.delivery ?? firstNumberInRange(gameFontPair.slice(0, 3), 0, 200) ?? firstNumberInRange(byLabel.delivery || "", 0, 200),
+    assistDelivery: firstNumberInRange(byGameFont.assistDelivery || "", 0, 99) ?? playerDelivery.assistDelivery ?? firstNumberInRange(gameFontPair.slice(2), 0, 99) ?? firstNumberInRange(byLabel.assistDelivery || "", 0, 99),
+    red: firstNumber(byGameFont.red || "") ?? firstNumber(byLabel.red || ""),
+    boss: firstNumberInRange(byGameFont.boss || "", 0, 99) ?? firstNumber(byLabel.boss || ""),
+    rescue: firstNumberInRange(byGameFont.rescue || "", 0, 9) ?? firstNumber(byLabel.rescue || ""),
+    death: firstNumberInRange(byGameFont.death || "", 0, 9) ?? firstNumber(byLabel.death || ""),
   };
 
   Object.entries(fields).forEach(([id, number]) => {
@@ -551,23 +812,27 @@ async function readTopResultFromImage(file) {
   const image = await loadImageFromFile(file);
   const profile = selectOcrProfile(image);
   const { canvas: baseCanvas, context } = drawBaseImage(image, profile);
-  const rowTop = detectTopPlayerRow(context, profile);
+  const rowInfo = detectTopPlayerRow(context, profile);
   const reads = [];
 
   for (const [label, rect] of Object.entries(profile.summaryRects)) {
     statusText.textContent = `合計欄を読み取り中... ${label}`;
     const crop = cropTopRowRegion(baseCanvas, 0, rect);
-    reads.push(await recognizeDigits(crop, label));
+    const read = await recognizeDigits(crop, label);
+    read.gameFontText = readGameFontNumber(crop, gameFontOptionsForLabel(label));
+    reads.push(read);
   }
 
   for (const [label, rect] of Object.entries(profile.topRowRects)) {
     statusText.textContent = `1番上の行を読み取り中... ${label}`;
-    const crop = cropTopRowRegion(baseCanvas, rowTop, rect);
-    reads.push(await recognizeDigits(crop, label));
+    const crop = cropTopRowRegion(baseCanvas, rowInfo, rect);
+    const read = await recognizeDigits(crop, label);
+    read.gameFontText = readGameFontNumber(crop, gameFontOptionsForLabel(label));
+    reads.push(read);
   }
 
   const fields = fillFromTopRowOcr(reads);
-  return { rowTop, reads, fields, profile };
+  return { rowTop: rowInfo.top, rowInfo, reads, fields, profile };
 }
 
 function autoFillFromText(text) {
@@ -704,6 +969,12 @@ applyCropButton.addEventListener("click", async () => {
 ocrButton.addEventListener("click", async () => {
   if (!imageInput.files[0]) {
     alert("スクショを選択してください。");
+    return;
+  }
+
+  if (cropSourceImage && !croppedImageBlob) {
+    alert("先にガイド枠に合わせて「この形に切り取る」を押してください。");
+    statusText.textContent = "ガイド枠に合わせて切り取りを確定してから読み取れます。";
     return;
   }
 

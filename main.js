@@ -251,6 +251,18 @@ function setValue(id, n) {
   if (element && Number.isFinite(n)) element.value = n;
 }
 
+function resetRecordForm() {
+  selectedImageData = "";
+  imageInput.value = "";
+  preview.removeAttribute("src");
+  preview.style.display = "none";
+
+  ["delivery", "assistDelivery", "teamDelivery", "red", "boss", "rescue", "death"].forEach((id) => {
+    const element = $(id);
+    if (element) element.value = "";
+  });
+}
+
 function currentWaveType() {
   return document.querySelector('input[name="waveType"]:checked')?.value || "dayOnly";
 }
@@ -594,8 +606,10 @@ saveButton.addEventListener("click", async () => {
     const records = loadRecords();
     records.push(record);
     await saveRecords(records);
+    resetRecordForm();
     renderAll();
-    statusText.textContent = "記録を保存しました";
+    statusText.textContent = "保存しました。";
+    alert("保存しました。");
   } catch (error) {
     console.error(error);
     statusText.textContent = error.message || "記録の保存に失敗しました";

@@ -694,14 +694,31 @@ h1 {
   white-space: nowrap;
 }
 
+.recentActions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.editRecordButton,
 .deleteRecordButton {
   width: auto;
   min-height: 34px;
   padding: 7px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.editRecordButton {
+  border-color: rgba(240, 216, 121, .32);
+  background: rgba(240, 216, 121, .1);
+  color: #f0d879;
+}
+
+.deleteRecordButton {
   border-color: rgba(255, 107, 107, .32);
   background: rgba(255, 107, 107, .1);
   color: #ffc0c0;
-  font-size: 12px;
 }
 
 .recentNumbers {
@@ -722,6 +739,72 @@ h1 {
 
 .recentNumbers b {
   color: var(--text);
+}
+
+.recentEditForm {
+  display: none;
+}
+
+.recentCard.isEditing .recentNumbers {
+  display: none;
+}
+
+.recentCard.isEditing .recentEditForm {
+  display: grid;
+  gap: 10px;
+}
+
+.recentEditGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.recentEditGrid label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.recentEditGrid span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.recentEditGrid input {
+  min-height: 38px;
+  border: 1px solid rgba(244, 247, 242, .12);
+  border-radius: 8px;
+  padding: 8px 9px;
+  background: #080b09;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 850;
+}
+
+.recentEditActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.saveRecordEditButton,
+.cancelRecordEditButton {
+  min-height: 38px;
+  font-size: 13px;
+}
+
+.saveRecordEditButton {
+  border-color: rgba(93, 216, 129, .35);
+  background: rgba(93, 216, 129, .16);
+  color: #b8f6c8;
+}
+
+.cancelRecordEditButton {
+  border-color: rgba(244, 247, 242, .14);
+  background: rgba(244, 247, 242, .06);
+  color: var(--muted);
 }
 
 .emptyText {

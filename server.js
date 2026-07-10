@@ -246,6 +246,7 @@ function normalizeRecord(record) {
   const assistDelivery = Number(record.assistDelivery ?? record.assist ?? 0);
   const teamDelivery = Number(record.teamDelivery ?? record.totalDelivery ?? 0);
   return {
+    ...record,
     id: String(record.id || crypto.randomUUID()),
     date: String(record.date || new Date().toISOString()),
     waveType: record.waveType === "nightAny" ? "nightAny" : "dayOnly",

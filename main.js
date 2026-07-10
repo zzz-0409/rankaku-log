@@ -1363,6 +1363,68 @@ async function deleteRecord(recordId) {
   return true;
 }
 
+const RECENT_EDIT_FIELDS = [
+  ["teamDelivery", "合計納品数"],
+  ["delivery", "個人納品数"],
+  ["assistDelivery", "アシスト"],
+  ["red", "赤イクラ"],
+  ["boss", "オオモノ"],
+  ["rescue", "救助"],
+  ["death", "デス"],
+];
+
+function nonNegativeInteger(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  return Math.max(0, Math.trunc(number));
+}
+
+async function updateRecordNumbers(recordId, values) {
+  const records = loadRecords();
+  const record = records.find((item) => item.id === recordId);
+  if (!record) return false;
+
+  const nextValues = Object.fromEntries(
+    RECENT_EDIT_FIELDS.map(([key]) => [key, nonNegativeInteger(values[key])])
+  );
+  const editedKeys = RECENT_EDIT_FIELDS
+    .map(([key]) => key)
+    .filter((key) => Number(record[key] || 0) !== nextValues[key]);
+
+  if (editedKeys.length === 0) return false;
+
+  const nextRecords = records.map((item) => {
+    if (item.id !== recordId) return item;
+    const nextRecord = {
+      ...item,
+      ...nextValues,
+      gold: nextValues.teamDelivery,
+      editedAt: new Date().toISOString(),
+    };
+
+    if (nextRecord.ocrTraining) {
+      const correctedFields = {
+        ...(nextRecord.ocrTraining.correctedFields || {}),
+        ...nextValues,
+      };
+      nextRecord.ocrTraining = {
+        ...nextRecord.ocrTraining,
+        correctedFields,
+        changedFields: Object.keys(correctedFields).filter((key) => (
+          Number(nextRecord.ocrTraining.ocrFields?.[key] ?? correctedFields[key]) !== Number(correctedFields[key])
+        )),
+      };
+    }
+
+    return nextRecord;
+  });
+
+  await saveRecords(nextRecords);
+  renderAll();
+  statusText.textContent = "記録を修正しました";
+  return true;
+}
+
 function renderSummary() {
   const records = loadRecords();
   const stage = $("stage").value;
@@ -1423,9 +1485,15 @@ function renderRecentRecord(record) {
     ? `<img src="${record.imageData}" alt="最近の記録画像" />`
     : `<div class="recentNoImage">画像なし</div>`;
   const bossBadge = record.bossBattle ? `<span class="bossBattleBadge">オカシラあり</span>` : "";
+  const editFields = RECENT_EDIT_FIELDS.map(([key, label]) => `
+    <label>
+      <span>${escapeHtml(label)}</span>
+      <input type="number" inputmode="numeric" min="0" step="1" name="${escapeHtml(key)}" value="${Number(record[key] || 0)}" />
+    </label>
+  `).join("");
 
   return `
-    <article class="recentCard">
+    <article class="recentCard" data-record-id="${escapeHtml(record.id)}">
       ${image}
       <div class="recentMain">
         <div class="recentTop">
@@ -1433,7 +1501,10 @@ function renderRecentRecord(record) {
             <h3>${escapeHtml(record.stage || "ステージ未設定")}</h3>
             <p>${escapeHtml(formatRecordDate(record.date))} / ${WAVE_TYPES[record.waveType] || ""} ${bossBadge}</p>
           </div>
-          <button class="deleteRecordButton" type="button" data-record-id="${escapeHtml(record.id)}">削除</button>
+          <div class="recentActions">
+            <button class="editRecordButton" type="button">修正</button>
+            <button class="deleteRecordButton" type="button" data-record-id="${escapeHtml(record.id)}">削除</button>
+          </div>
         </div>
         <div class="recentNumbers">
           <span>合計 <b>${Number(record.teamDelivery || 0)}</b></span>
@@ -1444,6 +1515,15 @@ function renderRecentRecord(record) {
           <span>救助 <b>${Number(record.rescue || 0)}</b></span>
           <span>デス <b>${Number(record.death || 0)}</b></span>
         </div>
+        <form class="recentEditForm">
+          <div class="recentEditGrid">
+            ${editFields}
+          </div>
+          <div class="recentEditActions">
+            <button class="saveRecordEditButton" type="submit">保存</button>
+            <button class="cancelRecordEditButton" type="button">キャンセル</button>
+          </div>
+        </form>
       </div>
     </article>
   `;
@@ -1801,6 +1881,18 @@ document.addEventListener("keydown", (event) => {
 exportTrainingButton.addEventListener("click", exportTrainingData);
 
 $("recentRecords").addEventListener("click", async (event) => {
+  const editButton = event.target.closest(".editRecordButton");
+  if (editButton) {
+    editButton.closest(".recentCard")?.classList.add("isEditing");
+    return;
+  }
+
+  const cancelButton = event.target.closest(".cancelRecordEditButton");
+  if (cancelButton) {
+    cancelButton.closest(".recentCard")?.classList.remove("isEditing");
+    return;
+  }
+
   const button = event.target.closest(".deleteRecordButton");
   if (!button) return;
   button.disabled = true;
@@ -1811,6 +1903,35 @@ $("recentRecords").addEventListener("click", async (event) => {
     console.error(error);
     statusText.textContent = error.message || "記録の削除に失敗しました";
     button.disabled = false;
+  }
+});
+
+$("recentRecords").addEventListener("submit", async (event) => {
+  const form = event.target.closest(".recentEditForm");
+  if (!form) return;
+  event.preventDefault();
+
+  const card = form.closest(".recentCard");
+  const recordId = card?.dataset.recordId;
+  if (!recordId) return;
+
+  const saveButton = form.querySelector(".saveRecordEditButton");
+  saveButton.disabled = true;
+  try {
+    const formData = new FormData(form);
+    const values = Object.fromEntries(
+      RECENT_EDIT_FIELDS.map(([key]) => [key, formData.get(key)])
+    );
+    const updated = await updateRecordNumbers(recordId, values);
+    if (!updated) {
+      card.classList.remove("isEditing");
+      statusText.textContent = "修正する数字はありません";
+      saveButton.disabled = false;
+    }
+  } catch (error) {
+    console.error(error);
+    statusText.textContent = error.message || "記録の修正に失敗しました";
+    saveButton.disabled = false;
   }
 });
 

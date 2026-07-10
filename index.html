@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>乱獲ログ</title>
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="style.css?v=20260710-8" />
+  <link rel="stylesheet" href="style.css?v=20260710-10" />
 </head>
 <body>
   <section id="loginScreen" class="loginScreen">
@@ -45,6 +45,7 @@
 
     <nav class="viewTabs" aria-label="ページ切り替え">
       <button class="viewTab active" type="button" data-view-target="logView">記録</button>
+      <button class="viewTab" type="button" data-view-target="recentView">最近の記録</button>
       <button class="viewTab" type="button" data-view-target="bestView">最高まとめ</button>
     </nav>
 
@@ -146,6 +147,23 @@
         </section>
       </div>
 
+      <div id="recentView" class="view">
+        <section class="panel">
+          <div class="sectionTitle">
+            <span class="step">30</span>
+            <h2>直近30戦の平均</h2>
+          </div>
+          <div id="recentAverage"></div>
+        </section>
+
+        <section class="panel">
+          <div class="sectionTitle compactTitle">
+            <h2>最近の記録</h2>
+          </div>
+          <div id="recentRecords" class="recentList"></div>
+        </section>
+      </div>
+
       <div id="bestView" class="view">
         <section class="panel">
           <div class="sectionTitle">
@@ -173,6 +191,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="main.js?v=20260710-9"></script>
+  <script src="main.js?v=20260710-10"></script>
 </body>
 </html>

@@ -627,6 +627,23 @@ function bestByTeamDelivery(records) {
   }, null);
 }
 
+function latestRecords(records, limit = 30) {
+  return [...records]
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, limit);
+}
+
+function formatRecordDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("ja-JP", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function stat(label, valueText, subText = "") {
   return `
     <div class="statBox">
@@ -635,6 +652,20 @@ function stat(label, valueText, subText = "") {
       ${subText ? `<span class="statSub">${escapeHtml(subText)}</span>` : ""}
     </div>
   `;
+}
+
+async function deleteRecord(recordId) {
+  const record = loadRecords().find((item) => item.id === recordId);
+  if (!record) return false;
+
+  const ok = confirm(`${formatRecordDate(record.date)} ${record.stage} の記録を削除しますか？`);
+  if (!ok) return false;
+
+  const nextRecords = loadRecords().filter((item) => item.id !== recordId);
+  await saveRecords(nextRecords);
+  renderAll();
+  statusText.textContent = "記録を削除しました";
+  return true;
 }
 
 function renderSummary() {
@@ -668,6 +699,63 @@ function renderSummary() {
       </div>
     </div>
   `;
+}
+
+function renderRecentAverage(recentRecords) {
+  $("recentAverage").innerHTML = `
+    <div class="stats">
+      <div class="statBox wide">
+        <span class="statLabel">対象</span>
+        <span class="statValue">${recentRecords.length}戦</span>
+        <span class="statSub">保存日時が新しい順の直近30戦</span>
+      </div>
+      ${stat("平均 合計納品数", avg(recentRecords, "teamDelivery").toFixed(2), `最高 ${max(recentRecords, "teamDelivery")}`)}
+      ${stat("平均 個人納品数", avg(recentRecords, "delivery").toFixed(2), `最高 ${max(recentRecords, "delivery")}`)}
+      ${stat("平均 アシスト", avg(recentRecords, "assistDelivery").toFixed(2), `最高 ${max(recentRecords, "assistDelivery")}`)}
+      ${stat("平均 赤イクラ", avg(recentRecords, "red").toFixed(2), `最高 ${max(recentRecords, "red")}`)}
+      ${stat("平均 オオモノ", avg(recentRecords, "boss").toFixed(2), `最高 ${max(recentRecords, "boss")}`)}
+      ${stat("平均 救助", avg(recentRecords, "rescue").toFixed(2), `最高 ${max(recentRecords, "rescue")}`)}
+      ${stat("平均 デス", avg(recentRecords, "death").toFixed(2), `最少 ${min(recentRecords, "death")}`)}
+    </div>
+  `;
+}
+
+function renderRecentRecord(record) {
+  const image = record.imageData
+    ? `<img src="${record.imageData}" alt="最近の記録画像" />`
+    : `<div class="recentNoImage">画像なし</div>`;
+
+  return `
+    <article class="recentCard">
+      ${image}
+      <div class="recentMain">
+        <div class="recentTop">
+          <div>
+            <h3>${escapeHtml(record.stage || "ステージ未設定")}</h3>
+            <p>${escapeHtml(formatRecordDate(record.date))} / ${WAVE_TYPES[record.waveType] || ""}</p>
+          </div>
+          <button class="deleteRecordButton" type="button" data-record-id="${escapeHtml(record.id)}">削除</button>
+        </div>
+        <div class="recentNumbers">
+          <span>合計 <b>${Number(record.teamDelivery || 0)}</b></span>
+          <span>個人 <b>${Number(record.delivery || 0)}</b></span>
+          <span>アシスト <b>${Number(record.assistDelivery || 0)}</b></span>
+          <span>赤 <b>${Number(record.red || 0)}</b></span>
+          <span>オオモノ <b>${Number(record.boss || 0)}</b></span>
+          <span>救助 <b>${Number(record.rescue || 0)}</b></span>
+          <span>デス <b>${Number(record.death || 0)}</b></span>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function renderRecentRecords() {
+  const recent = latestRecords(loadRecords(), 30);
+  renderRecentAverage(recent);
+  $("recentRecords").innerHTML = recent.length
+    ? recent.map(renderRecentRecord).join("")
+    : `<p class="emptyText">記録がまだありません</p>`;
 }
 
 function totalCard(records, waveType) {
@@ -734,6 +822,7 @@ function renderBestSummary() {
 function renderAll() {
   if (!activeAccount) return;
   renderSummary();
+  renderRecentRecords();
   renderBestSummary();
   updateRecordCount();
 }
@@ -750,6 +839,20 @@ function setView(viewId) {
 
 document.querySelectorAll(".viewTab").forEach((tab) => {
   tab.addEventListener("click", () => setView(tab.dataset.viewTarget));
+});
+
+$("recentRecords").addEventListener("click", async (event) => {
+  const button = event.target.closest(".deleteRecordButton");
+  if (!button) return;
+  button.disabled = true;
+  try {
+    const deleted = await deleteRecord(button.dataset.recordId);
+    if (!deleted) button.disabled = false;
+  } catch (error) {
+    console.error(error);
+    statusText.textContent = error.message || "記録の削除に失敗しました";
+    button.disabled = false;
+  }
 });
 
 $("stage").addEventListener("change", renderAll);

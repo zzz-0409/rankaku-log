@@ -825,7 +825,7 @@ h1 {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
-  width: min(100%, 560px);
+  width: min(100%, 820px);
   max-height: 92vh;
   border: 1px solid rgba(244, 247, 242, .12);
   border-radius: 8px;
@@ -862,8 +862,10 @@ h1 {
 
 #expandedImage {
   display: block;
-  width: 100%;
+  width: auto;
+  max-width: 100%;
   max-height: calc(92vh - 78px);
+  justify-self: center;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #050706;

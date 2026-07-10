@@ -415,7 +415,7 @@ async function applyCurrentCrop() {
 
   croppedImageBlob = blob;
   lastImageSource = "cropped";
-  selectedImageData = cropCanvas.toDataURL("image/jpeg", 0.76);
+  selectedImageData = cropCanvas.toDataURL("image/jpeg", 0.94);
   preview.src = selectedImageData;
   preview.style.display = "block";
   statusText.textContent = "切り取りました。読み取り前に位置を確認してください。";
@@ -982,7 +982,7 @@ function fileToCompressedDataUrl(file) {
     reader.onload = () => {
       const image = new Image();
       image.onload = () => {
-        const maxSide = 900;
+        const maxSide = 1800;
         const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
         const canvas = document.createElement("canvas");
         canvas.width = Math.round(image.width * scale);
@@ -990,7 +990,7 @@ function fileToCompressedDataUrl(file) {
 
         const context = canvas.getContext("2d");
         context.drawImage(image, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/jpeg", 0.72));
+        resolve(canvas.toDataURL("image/jpeg", 0.9));
       };
       image.onerror = () => resolve(String(reader.result || ""));
       image.src = reader.result;

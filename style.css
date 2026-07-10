@@ -754,6 +754,10 @@ h1 {
   object-fit: cover;
 }
 
+.bestCard img {
+  cursor: zoom-in;
+}
+
 .noImage {
   display: grid;
   place-items: center;
@@ -797,6 +801,66 @@ h1 {
   color: var(--accent);
   font-size: 28px;
   line-height: 1;
+}
+
+.imageModal {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: calc(16px + env(safe-area-inset-top)) 12px calc(16px + env(safe-area-inset-bottom));
+  background: rgba(0, 0, 0, .78);
+  backdrop-filter: blur(10px);
+}
+
+.imageModalContent {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+  width: min(100%, 560px);
+  max-height: 92vh;
+  border: 1px solid rgba(244, 247, 242, .12);
+  border-radius: 8px;
+  padding: 10px;
+  background: #111714;
+  box-shadow: 0 20px 54px rgba(0, 0, 0, .46);
+}
+
+.imageModalHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.imageModalHeader h2 {
+  overflow: hidden;
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#closeImageModal {
+  width: 42px;
+  min-width: 42px;
+  min-height: 42px;
+  padding: 0;
+  border-color: rgba(244, 247, 242, .16);
+  font-size: 26px;
+  line-height: 1;
+}
+
+#expandedImage {
+  display: block;
+  width: 100%;
+  max-height: calc(92vh - 78px);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #050706;
+  object-fit: contain;
 }
 
 @media (min-width: 700px) {

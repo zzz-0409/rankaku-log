@@ -87,6 +87,10 @@ const cropZoom = $("cropZoom");
 const cropX = $("cropX");
 const cropY = $("cropY");
 const applyCropButton = $("applyCropButton");
+const imageModal = $("imageModal");
+const imageModalTitle = $("imageModalTitle");
+const expandedImage = $("expandedImage");
+const closeImageModal = $("closeImageModal");
 
 let selectedImageData = "";
 let croppedImageBlob = null;
@@ -1495,6 +1499,19 @@ function renderBestSummary() {
   });
 }
 
+function openImageModal(src, title) {
+  if (!src) return;
+  expandedImage.src = src;
+  imageModalTitle.textContent = title || "最高記録画像";
+  imageModal.hidden = false;
+  closeImageModal.focus();
+}
+
+function closeExpandedImage() {
+  imageModal.hidden = true;
+  expandedImage.removeAttribute("src");
+}
+
 function renderAll() {
   if (!activeAccount) return;
   renderSummary();
@@ -1547,6 +1564,25 @@ $("totalSummary").addEventListener("click", async (event) => {
   } finally {
     button.disabled = false;
   }
+});
+
+document.querySelectorAll(".bestList").forEach((list) => {
+  list.addEventListener("click", (event) => {
+    const image = event.target.closest(".bestCard img");
+    if (!image) return;
+    const title = image.closest(".bestCard")?.querySelector("h3")?.textContent || "最高記録画像";
+    openImageModal(image.src, title);
+  });
+});
+
+closeImageModal.addEventListener("click", closeExpandedImage);
+
+imageModal.addEventListener("click", (event) => {
+  if (event.target === imageModal) closeExpandedImage();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !imageModal.hidden) closeExpandedImage();
 });
 
 $("recentRecords").addEventListener("click", async (event) => {
